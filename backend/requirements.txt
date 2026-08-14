@@ -1,0 +1,7 @@
+Flask==3.1.1
+flask-cors==5.0.1
+pytesseract==0.3.13
+Pillow==11.2.1
+qrcode[pil]==8.1
+python-dotenv==1.1.0
+gunicorn==23.0.0
