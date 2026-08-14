@@ -13,8 +13,12 @@ class Config:
 
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 
-    # SQLite
-    SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "constellation_game.db")
+    # MySQL
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_PORT = int(os.getenv("MYSQL_PORT", 3306))
+    MYSQL_USER = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "constellation_game")
 
     # OCR
     TESSERACT_CMD = os.getenv(

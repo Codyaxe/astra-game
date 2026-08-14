@@ -81,28 +81,36 @@ CONSTELLATIONS = [
 
 def seed():
     conn = get_connection()
-    for c in CONSTELLATIONS:
-        conn.execute(
-            """
-            INSERT INTO constellations (name, head_node_id, star_nodes_json, fake_nodes_json, time_limit_sec)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-                head_node_id    = excluded.head_node_id,
-                star_nodes_json = excluded.star_nodes_json,
-                fake_nodes_json = excluded.fake_nodes_json,
-                time_limit_sec  = excluded.time_limit_sec
-            """,
-            (
-                c["name"],
-                c["head_node_id"],
-                json.dumps(c["star_nodes"]),
-                json.dumps(c["fake_nodes"]),
-                c["time_limit_sec"],
-            ),
-        )
-    conn.commit()
-    conn.close()
-    print(f"Seeded {len(CONSTELLATIONS)} constellations with Linked List struct data.")
+    cursor = conn.cursor()
+    try:
+        for c in CONSTELLATIONS:
+            cursor.execute(
+                """
+                INSERT INTO constellations
+                    (name, head_node_id, star_nodes_json, fake_nodes_json, time_limit_sec)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    head_node_id    = VALUES(head_node_id),
+                    star_nodes_json = VALUES(star_nodes_json),
+                    fake_nodes_json = VALUES(fake_nodes_json),
+                    time_limit_sec  = VALUES(time_limit_sec)
+                """,
+                (
+                    c["name"],
+                    c["head_node_id"],
+                    json.dumps(c["star_nodes"]),
+                    json.dumps(c["fake_nodes"]),
+                    c["time_limit_sec"],
+                ),
+            )
+        conn.commit()
+        print(f"Seeded {len(CONSTELLATIONS)} constellations with Linked List struct data.")
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 
 if __name__ == "__main__":
