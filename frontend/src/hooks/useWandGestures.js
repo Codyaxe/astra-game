@@ -1,7 +1,10 @@
 /**
- * useWandGestures.js — Clean, Single-Mount MediaPipe Wand Tracking
+ * useWandGestures.js — Manual Finger Control Hook
  *
- * Camera and MediaPipe Hands are initialized ONCE on mount (no infinite restart loop).
+ * Controls:
+ * - Free cursor pointing with 1€ adaptive motion smoothing
+ * - 2 Fingers Up -> Activates manual magnetic snap (isManualSnap = true)
+ * - 3 Fingers Up -> Fires onResetAll()
  */
 
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -10,34 +13,37 @@ import { MotionSmoother } from '../tracking/motionSmoothing';
 
 export function useWandGestures({
   enabled = true,
-  onConnectionCycleComplete,
+  onResetAll,
+  onManualSnapSelect, // fires when 2-finger snap locks/selects node
 }) {
   const videoRef = useRef(null);
   const cameraRef = useRef(null);
   const handsRef = useRef(null);
   const detectorRef = useRef(new GestureDetector());
   const smootherRef = useRef(new MotionSmoother(1.2, 0.015, 1.0));
-  const onCompleteRef = useRef(onConnectionCycleComplete);
 
-  // Keep callback reference updated without triggering re-initialization
+  const onResetRef = useRef(onResetAll);
+  const onSnapSelectRef = useRef(onManualSnapSelect);
+
   useEffect(() => {
-    onCompleteRef.current = onConnectionCycleComplete;
-  }, [onConnectionCycleComplete]);
+    onResetRef.current = onResetAll;
+    onSnapSelectRef.current = onManualSnapSelect;
+  }, [onResetAll, onManualSnapSelect]);
 
   const [pointer, setPointer] = useState(null);
-  const [onHold, setOnHold] = useState(false);
-  const [onDraw, setOnDraw] = useState(false);
-  const [gestureStatus, setGestureStatus] = useState('Neutral');
+  const [isManualSnap, setIsManualSnap] = useState(false);
+  const [gestureStatus, setGestureStatus] = useState('Free Pointing (1 Finger)');
   const [isReady, setIsReady] = useState(false);
 
-  const holdRef = useRef(false);
-  const drawRef = useRef(false);
-  const lastActionTimeRef = useRef(0);
+  const lastSnapActiveRef = useRef(false);
+  const lastResetTimeRef = useRef(0);
 
   const onResults = useCallback((results) => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
       smootherRef.current.reset();
       setPointer(null);
+      setIsManualSnap(false);
+      lastSnapActiveRef.current = false;
       return;
     }
 
@@ -45,41 +51,51 @@ export function useWandGestures({
     const detection = detectorRef.current.update(landmarks);
     if (!detection) return;
 
-    const { point, isForwardTilt, isNeutralTilt } = detection;
+    const { point, isTwoFingersUp, isThreeFingersUp } = detection;
 
-    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
-    const smoothedPoint = smootherRef.current.smooth(point, Date.now());
-    setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
+    // Apply 1€ Velocity-Adaptive Smoothing (mirror X for natural webcam tracking)
+    const smoothed = smootherRef.current.smooth({
+      x: 1 - point.x,
+      y: point.y,
+      z: point.z,
+    }, Date.now());
+
+    setPointer({ x: smoothed.x, y: smoothed.y, z: smoothed.z });
 
     const now = Date.now();
 
-    // Forward / Back Tilt (Draw Line State Machine)
-    if (isForwardTilt && !holdRef.current && now - lastActionTimeRef.current > 300) {
-      holdRef.current = true;
-      drawRef.current = true;
-      lastActionTimeRef.current = now;
-      setOnHold(true);
-      setOnDraw(true);
-      setGestureStatus('Drawing (Tilt Forward)');
-    } else if (isNeutralTilt && holdRef.current && now - lastActionTimeRef.current > 250) {
-      // Completed tilt -> untilt cycle: registers 1 deliberate click
-      holdRef.current = false;
-      drawRef.current = false;
-      lastActionTimeRef.current = now;
-      setOnHold(false);
-      setOnDraw(false);
-      setGestureStatus('Connected (Cycle Completed)');
-      onCompleteRef.current?.();
-      setTimeout(() => setGestureStatus('Neutral'), 600);
+    // 1. Three Fingers Up -> Full Reset
+    if (isThreeFingersUp && now - lastResetTimeRef.current > 1200) {
+      lastResetTimeRef.current = now;
+      setGestureStatus('Three-Finger Reset ↺');
+      onResetRef.current?.();
+      setTimeout(() => setGestureStatus('Free Pointing (1 Finger)'), 1000);
+      return;
     }
-  }, []); // Static callback — never changes identity
+
+    // 2. Two Fingers Up -> Manual Magnetic Snap
+    if (isTwoFingersUp) {
+      if (!lastSnapActiveRef.current) {
+        lastSnapActiveRef.current = true;
+        setIsManualSnap(true);
+        setGestureStatus('Manual Snap Active (✌️ 2 Fingers)');
+        onSnapSelectRef.current?.('snap_start');
+      }
+    } else {
+      if (lastSnapActiveRef.current) {
+        lastSnapActiveRef.current = false;
+        setIsManualSnap(false);
+        setGestureStatus('Free Pointing (1 Finger)');
+        onSnapSelectRef.current?.('snap_release');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
 
     async function initCamera() {
-      // Wait for video element to attach if not ready
       if (!videoRef.current) {
         setTimeout(() => {
           if (!cancelled) initCamera();
@@ -88,11 +104,11 @@ export function useWandGestures({
       }
 
       if (typeof window === 'undefined' || !window.Hands || !window.Camera) {
-        console.warn('[ASTRA] MediaPipe library scripts not ready on window');
+        console.warn('[ASTRA] MediaPipe scripts loading...');
         return;
       }
 
-      console.log('[ASTRA] 📷 Initializing MediaPipe Hands & Camera stream (Single-Mount)...');
+      console.log('[ASTRA] 📷 Initializing MediaPipe Hands & Camera...');
 
       // eslint-disable-next-line no-undef
       const hands = new window.Hands({
@@ -122,7 +138,7 @@ export function useWandGestures({
 
       cameraRef.current = camera;
       await camera.start();
-      console.log('[ASTRA] 📷 Webcam camera stream running smoothly!');
+      console.log('[ASTRA] 📷 Webcam camera running smoothly!');
       if (!cancelled) setIsReady(true);
     }
 
@@ -143,8 +159,7 @@ export function useWandGestures({
   return {
     videoRef,
     pointer,
-    onHold,
-    onDraw,
+    isManualSnap,
     gestureStatus,
     isReady,
   };

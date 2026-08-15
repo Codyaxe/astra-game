@@ -1,25 +1,25 @@
 /**
  * ConstellationCanvas.jsx — Main visual canvas rendering:
- * - Star nodes with visual radius + extended hitbox interactive zone
- * - Decoy fake stars
- * - Permanent validated connected lines
- * - Live active dragging line from current node to wand pointer when onDraw is true
- * - Wand cursor & magnetic snap visualizer
+ * - Validated correct connections (Glowing Green)
+ * - Mistake trails (Dashed Red)
+ * - Decoy fake stars & Real star nodes
+ * - Active drawing line & 2-finger manual snap reticle
  */
 
-import { useRef, useEffect, useCallback } from 'react';
+import { memo, useRef, useEffect, useCallback } from 'react';
 
 const STAR_VISUAL_RADIUS = 12;
 const FAKE_STAR_RADIUS = 8;
 
-export default function ConstellationCanvas({
+function ConstellationCanvas({
   starNodes = [],
   fakeNodes = [],
-  completedConnections = [], // Array of { from: StarNode, to: StarNode }
+  completedConnections = [], // [{ from, to }] (Green)
+  mistakeTrails = [],        // [{ from, to }] (Red)
   activeNode = null,         // StarNode currently being drawn from
   wandPointer = null,        // { x, y } (normalised)
-  snappedPointer = null,     // { x, y, snapped }
-  onDraw = false,            // whether line is actively being pulled
+  snappedPointer = null,     // { x, y, snapped, node }
+  onDraw = false,            // whether manual snap / drawing is active
   width,
   height,
 }) {
@@ -31,7 +31,23 @@ export default function ConstellationCanvas({
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Validated Completed Connections
+    // 1. Draw Mistake Trails (Red Dashed Lines)
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = '#ef4444';
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+    ctx.shadowBlur = 8;
+    ctx.setLineDash([6, 6]);
+    for (const trail of mistakeTrails) {
+      if (!trail.from || !trail.to) continue;
+      ctx.beginPath();
+      ctx.moveTo(trail.from.x * width, trail.from.y * height);
+      ctx.lineTo(trail.to.x * width, trail.to.y * height);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+
+    // 2. Draw Validated Completed Connections (Glowing Green)
     ctx.lineWidth = 3.5;
     ctx.strokeStyle = '#4ade80';
     ctx.shadowColor = 'rgba(74, 222, 128, 0.8)';
@@ -43,13 +59,13 @@ export default function ConstellationCanvas({
       ctx.lineTo(conn.to.x * width, conn.to.y * height);
       ctx.stroke();
     }
-    ctx.shadowBlur = 0; // reset shadow
+    ctx.shadowBlur = 0;
 
-    // 2. Draw Active Line from current activeNode to wand pointer when ON_DRAW = true
-    if (onDraw && activeNode && (snappedPointer || wandPointer)) {
-      const target = snappedPointer || wandPointer;
+    // 3. Draw Active Dragging Line from activeNode to Pointer/Snapped Target
+    if (activeNode && (snappedPointer || wandPointer)) {
+      const target = snappedPointer?.snapped ? snappedPointer : wandPointer;
       ctx.lineWidth = 2.5;
-      ctx.strokeStyle = snappedPointer?.snapped ? 'rgba(74, 222, 128, 0.9)' : 'rgba(108, 99, 255, 0.85)';
+      ctx.strokeStyle = onDraw ? 'rgba(74, 222, 128, 0.9)' : 'rgba(108, 99, 255, 0.4)';
       ctx.setLineDash([8, 6]);
       ctx.beginPath();
       ctx.moveTo(activeNode.x * width, activeNode.y * height);
@@ -58,17 +74,17 @@ export default function ConstellationCanvas({
       ctx.setLineDash([]);
     }
 
-    // 3. Draw Decoy Fake Stars
+    // 4. Draw Decoy Fake Stars
     for (const fake of fakeNodes) {
       const fx = fake.x * width;
       const fy = fake.y * height;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.beginPath();
       ctx.arc(fx, fy, FAKE_STAR_RADIUS, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 4. Draw Real Star Nodes
+    // 5. Draw Real Star Nodes
     for (const node of starNodes) {
       const nx = node.x * width;
       const ny = node.y * height;
@@ -76,7 +92,7 @@ export default function ConstellationCanvas({
       const isActive = activeNode?.id === node.id;
 
       // Extended Hitbox ring (subtle guide)
-      ctx.strokeStyle = isActive ? 'rgba(108, 99, 255, 0.4)' : 'rgba(255, 255, 255, 0.06)';
+      ctx.strokeStyle = isActive ? 'rgba(108, 99, 255, 0.5)' : 'rgba(255, 255, 255, 0.08)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(nx, ny, hitboxPx, 0, Math.PI * 2);
@@ -99,13 +115,13 @@ export default function ConstellationCanvas({
 
       // Star Label
       if (node.label) {
-        ctx.fillStyle = 'rgba(228, 230, 240, 0.85)';
+        ctx.fillStyle = 'rgba(228, 230, 240, 0.9)';
         ctx.font = '500 13px Outfit, sans-serif';
         ctx.fillText(node.label, nx + 16, ny + 4);
       }
     }
 
-    // 5. Draw Wand Cursor with Snapping feedback
+    // 6. Draw Wand Cursor & Manual Snap Reticle
     const cursor = snappedPointer || wandPointer;
     if (cursor) {
       const cx = cursor.x * width;
@@ -114,16 +130,16 @@ export default function ConstellationCanvas({
       ctx.strokeStyle = onDraw ? '#4ade80' : '#6c63ff';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, cursor.snapped ? 22 : 15, 0, Math.PI * 2);
+      ctx.arc(cx, cy, cursor.snapped ? 24 : 14, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Reticle center dot
+      // Center dot
       ctx.fillStyle = onDraw ? '#4ade80' : '#6c63ff';
       ctx.beginPath();
       ctx.arc(cx, cy, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [starNodes, fakeNodes, completedConnections, activeNode, wandPointer, snappedPointer, onDraw, width, height]);
+  }, [starNodes, fakeNodes, completedConnections, mistakeTrails, activeNode, wandPointer, snappedPointer, onDraw, width, height]);
 
   useEffect(() => {
     const frameId = requestAnimationFrame(draw);
@@ -139,3 +155,31 @@ export default function ConstellationCanvas({
     />
   );
 }
+
+function arePointersEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    Math.abs(a.x - b.x) < 0.0005 &&
+    Math.abs(a.y - b.y) < 0.0005 &&
+    Math.abs((a.z || 0) - (b.z || 0)) < 0.0005 &&
+    Boolean(a.snapped) === Boolean(b.snapped)
+  );
+}
+
+function arePropsEqual(prev, next) {
+  return (
+    prev.starNodes === next.starNodes &&
+    prev.fakeNodes === next.fakeNodes &&
+    prev.completedConnections === next.completedConnections &&
+    prev.mistakeTrails === next.mistakeTrails &&
+    prev.activeNode === next.activeNode &&
+    prev.onDraw === next.onDraw &&
+    prev.width === next.width &&
+    prev.height === next.height &&
+    arePointersEqual(prev.wandPointer, next.wandPointer) &&
+    arePointersEqual(prev.snappedPointer, next.snappedPointer)
+  );
+}
+
+export default memo(ConstellationCanvas, arePropsEqual);
