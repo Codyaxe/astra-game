@@ -214,6 +214,7 @@ export default function App() {
     case 'challenge':
       return (
         <ChallengeScreen
+          key={`challenge-${attemptNumber}-${constellationIndex}-${currentConstellation?.id || 0}`}
           player={player}
           constellation={currentConstellation}
           constellationIndex={constellationIndex}
