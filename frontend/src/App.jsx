@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getConstellations } from './services/api';
 import { preloadAll } from './utils/audio';
 import { ASSETS } from './data/assets';
+import { DEFAULT_CONSTELLATIONS } from './data/defaultConstellations';
 
 import TitleScreen from './screens/TitleScreen';
 import MenuScreen from './screens/MenuScreen';
@@ -25,7 +26,8 @@ export default function App() {
   const [attemptNumber, setAttemptNumber] = useState(1);
   const [lastAttemptResult, setLastAttemptResult] = useState(null);
 
-  const [constellations, setConstellations] = useState([]);
+  // Initialize with local constellations instantly — NO WAITING / NO DELAY!
+  const [constellations, setConstellations] = useState(DEFAULT_CONSTELLATIONS);
   const [constellationIndex, setConstellationIndex] = useState(0);
 
   // Preload SFX
@@ -33,15 +35,18 @@ export default function App() {
     preloadAll(ASSETS.sfx);
   }, []);
 
-  // Fetch constellations
+  // Async background sync with backend (filter out empty placeholder constellations)
   useEffect(() => {
     getConstellations()
       .then((res) => {
-        if (res.constellations && res.constellations.length > 0) {
-          setConstellations(res.constellations);
+        const valid = (res.constellations || []).filter(
+          (c) => Array.isArray(c.star_nodes) && c.star_nodes.length >= 2
+        );
+        if (valid.length > 0) {
+          setConstellations(valid);
         }
       })
-      .catch(console.error);
+      .catch(() => {});
   }, []);
 
   // ---- Screen Navigation Handlers ----
@@ -53,25 +58,40 @@ export default function App() {
 
   const handleRegistered = useCallback((playerData, attemptsRemaining) => {
     setPlayer(playerData);
-    const currentAttempt = (3 - attemptsRemaining) + 1;
+    const currentAttempt = 3 - attemptsRemaining;
     setAttemptNumber(currentAttempt);
     setConstellationIndex(0);
     setScreen('challenge');
   }, []);
 
   const handleChallengeComplete = useCallback((result) => {
-    setLastAttemptResult(result);
-    // Next constellation in chain or finish attempt
-    if (constellationIndex + 1 < constellations.length) {
-      setConstellationIndex((idx) => idx + 1);
-    } else {
-      setScreen('leaderboard');
-    }
-  }, [constellationIndex, constellations.length]);
+  setLastAttemptResult(result);
 
-  const handleForceExitOrDisqualified = useCallback(() => {
+  // Update the local player state with the latest attempt information
+  if (result?.attempts_used !== undefined) {
+    setPlayer((prev) =>
+      prev
+        ? {
+            ...prev,
+            total_attempts_used: result.attempts_used,
+            best_score: result.best_score,
+          }
+        : prev
+    );
+  }
+
+  // Next constellation in chain or finish attempt
+  if (constellationIndex + 1 < constellations.length) {
+    setConstellationIndex((idx) => idx + 1);
+  } else {
     setScreen('leaderboard');
-  }, []);
+  }
+}, [constellationIndex, constellations.length]);
+
+  const handleForceExitOrDisqualified = useCallback((result) => {
+  setLastAttemptResult(result);
+  setScreen('leaderboard');
+}, []);
 
   const handleRetryNextAttempt = useCallback(() => {
     setAttemptNumber((prev) => prev + 1);
@@ -122,6 +142,7 @@ export default function App() {
       }
       return (
         <ChallengeScreen
+          key={`${player?.id || 'guest'}-${currentConstellation.id || constellationIndex}-${attemptNumber}`}
           player={player}
           constellationData={currentConstellation}
           attemptNumber={attemptNumber}

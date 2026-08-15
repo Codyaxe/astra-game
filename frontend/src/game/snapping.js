@@ -24,7 +24,7 @@ export function getMagneticSnap(pointer, starNodes) {
 
   for (const node of starNodes) {
     const d = calculateDistance(pointer.x, pointer.y, node.x, node.y);
-    const hitbox = node.hitbox_radius || 0.055; // extended interactive zone
+    const hitbox = node.hitbox_radius || 0.025; // extended interactive zone
 
     if (d <= hitbox && d < minDistance) {
       minDistance = d;

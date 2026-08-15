@@ -1,27 +1,42 @@
-"""
-MySQL connection helper.
-Schema is managed externally (already applied to the `constellation_game`
-database) — this module provides pooled connections + query helpers.
-"""
-
+import mysql.connector
 from mysql.connector import pooling
 from config import Config
 
-_pool = pooling.MySQLConnectionPool(
-    pool_name="constellation_pool",
-    pool_size=5,
-    host=Config.MYSQL_HOST,
-    port=Config.MYSQL_PORT,
-    user=Config.MYSQL_USER,
-    password=Config.MYSQL_PASSWORD,
-    database=Config.MYSQL_DATABASE,
-    autocommit=False,
-)
+_pool = None
 
+def _get_pool():
+    global _pool
+    if _pool is None:
+        try:
+            _pool = pooling.MySQLConnectionPool(
+                pool_name="constellation_pool",
+                pool_size=5,
+                host=Config.MYSQL_HOST,
+                port=Config.MYSQL_PORT,
+                user=Config.MYSQL_USER,
+                password=Config.MYSQL_PASSWORD,
+                database=Config.MYSQL_DATABASE,
+                autocommit=False,
+            )
+        except Exception:
+            _pool = False
+    return _pool
 
 def get_connection():
-    """Get a pooled MySQL connection."""
-    return _pool.get_connection()
+    """Get a pooled MySQL connection with fallback to direct connection."""
+    pool = _get_pool()
+    if pool:
+        try:
+            return pool.get_connection()
+        except Exception:
+            pass
+    return mysql.connector.connect(
+        host=Config.MYSQL_HOST,
+        port=Config.MYSQL_PORT,
+        user=Config.MYSQL_USER,
+        password=Config.MYSQL_PASSWORD,
+        database=Config.MYSQL_DATABASE,
+    )
 
 
 def get_cursor(conn, dictionary: bool = True):
@@ -52,11 +67,24 @@ def execute(query: str, params: tuple = (), commit: bool = False):
 def get_leaderboard(limit: int = 10):
     """
     Best score per player, ranked highest first.
-    No separate leaderboard table — players.best_score is the
-    source of truth and is already updated whenever a session beats it.
+    Returns both raw DB column names and frontend-friendly aliases:
+    - id / player_id
+    - best_score / highest_score
+    - total_attempts_used / attempts_used
     """
     query = """
-        SELECT id, first_name, last_name, sr_code, course, best_score
+        SELECT 
+            id,
+            id AS player_id,
+            first_name,
+            last_name,
+            sr_code,
+            course,
+            best_score,
+            best_score AS highest_score,
+            total_attempts_used,
+            total_attempts_used AS attempts_used,
+            qr_ticket_code
         FROM players
         WHERE best_score > 0
         ORDER BY best_score DESC

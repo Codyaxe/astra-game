@@ -1,88 +1,31 @@
 """
 Constellation model — Linked-list struct parsing and traversal helpers.
-
-Database:
-    MySQL / mysql.connector
-
-Table:
-    constellations
 """
 
 import json
-from database.db import get_connection
+from database.db import execute, get_connection
 
 
 def get_all() -> list[dict]:
-    """
-    Retrieve all constellations.
-    """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
-        cursor.execute(
-            """
-            SELECT *
-            FROM constellations
-            ORDER BY id
-            """
-        )
-
-        rows = cursor.fetchall()
-        return [_parse_row(row) for row in rows]
-
-    finally:
-        cursor.close()
-        conn.close()
+    rows = execute("SELECT * FROM constellations ORDER BY id")
+    return [_parse_row(r) for r in rows]
 
 
 def get_by_id(constellation_id: int) -> dict | None:
+    rows = execute("SELECT * FROM constellations WHERE id = %s", (constellation_id,))
+    return _parse_row(rows[0]) if rows else None
+
+
+def validate_connection(constellation_id: int, from_node_id: int, to_node_id: int) -> bool:
     """
-    Retrieve a constellation by its ID.
+    Validate whether to_node_id is the valid expected linked next node for from_node_id.
     """
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    try:
-        cursor.execute(
-            """
-            SELECT *
-            FROM constellations
-            WHERE id = %s
-            """,
-            (constellation_id,),
-        )
-
-        row = cursor.fetchone()
-        return _parse_row(row) if row else None
-
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def validate_connection(
-    constellation_id: int,
-    from_node_id: int,
-    to_node_id: int,
-) -> bool:
-    """
-    Validate whether to_node_id is the expected next node
-    for from_node_id in the given constellation.
-    """
-
-    constellation = get_by_id(constellation_id)
-
-    if not constellation:
+    c = get_by_id(constellation_id)
+    if not c:
         return False
 
-    nodes_map = {
-        node["id"]: node
-        for node in constellation["star_nodes"]
-    }
-
+    nodes_map = {n["id"]: n for n in c.get("star_nodes", [])}
     current_node = nodes_map.get(from_node_id)
-
     if not current_node:
         return False
 
@@ -90,19 +33,11 @@ def validate_connection(
 
 
 def _parse_row(row) -> dict:
-    """
-    Convert a MySQL dictionary row into the structure expected
-    by the rest of the application.
-    """
-
-    data = dict(row)
-
-    data["star_nodes"] = json.loads(
-        data.pop("star_nodes_json", "[]")
-    )
-
-    data["fake_nodes"] = json.loads(
-        data.pop("fake_nodes_json", "[]")
-    )
-
-    return data
+    d = dict(row)
+    if "star_nodes_json" in d:
+        val = d.pop("star_nodes_json")
+        d["star_nodes"] = json.loads(val) if isinstance(val, str) else (val or [])
+    if "fake_nodes_json" in d:
+        val = d.pop("fake_nodes_json")
+        d["fake_nodes"] = json.loads(val) if isinstance(val, str) else (val or [])
+    return d

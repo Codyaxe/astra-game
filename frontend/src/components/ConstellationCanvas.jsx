@@ -72,7 +72,7 @@ export default function ConstellationCanvas({
     for (const node of starNodes) {
       const nx = node.x * width;
       const ny = node.y * height;
-      const hitboxPx = (node.hitbox_radius || 0.055) * Math.min(width, height);
+      const hitboxPx = (node.hitbox_radius || 0.025) * Math.min(width, height);
       const isActive = activeNode?.id === node.id;
 
       // Extended Hitbox ring (subtle guide)
