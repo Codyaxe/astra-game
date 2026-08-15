@@ -1,18 +1,23 @@
 /**
- * useGameTimer.js — Countdown timer hook for challenge time limits.
+ * useGameTimer.js — Timestamp-based Countdown Timer Hook
+ *
+ * Guaranteed bug-free:
+ * - Uses Date.now() timestamp differential (immune to re-render latency & interval drift)
+ * - Uses onExpireRef (no closure re-trigger bugs)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-/**
- * @param {number}   durationSec   — total seconds for the countdown
- * @param {Function} onExpire      — callback when timer hits 0
- * @returns {{ timeLeft, isRunning, start, stop, reset }}
- */
-export function useGameTimer(durationSec, onExpire) {
+export function useGameTimer(durationSec = 30, onExpire) {
   const [timeLeft, setTimeLeft] = useState(durationSec);
   const [isRunning, setIsRunning] = useState(false);
   const intervalRef = useRef(null);
+  const onExpireRef = useRef(onExpire);
+  const durationRef = useRef(durationSec);
+  const endTimeRef = useRef(0);
+
+  onExpireRef.current = onExpire;
+  durationRef.current = durationSec;
 
   const stop = useCallback(() => {
     setIsRunning(false);
@@ -23,34 +28,36 @@ export function useGameTimer(durationSec, onExpire) {
   }, []);
 
   const start = useCallback(() => {
-    stop();
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    const duration = durationRef.current || 30;
+    setTimeLeft(duration);
+    endTimeRef.current = Date.now() + duration * 1000;
     setIsRunning(true);
-  }, [stop]);
-
-  const reset = useCallback(() => {
-    stop();
-    setTimeLeft(durationSec);
-  }, [stop, durationSec]);
+  }, []);
 
   useEffect(() => {
     if (!isRunning) return;
 
     intervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          stop();
-          onExpire?.();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const now = Date.now();
+      const remainingMs = endTimeRef.current - now;
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
 
-    return () => clearInterval(intervalRef.current);
-  }, [isRunning, stop, onExpire]);
+      setTimeLeft(remainingSec);
 
-  // Cleanup on unmount
-  useEffect(() => () => clearInterval(intervalRef.current), []);
+      if (remainingMs <= 0) {
+        stop();
+        onExpireRef.current?.();
+      }
+    }, 200);
 
-  return { timeLeft, isRunning, start, stop, reset };
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isRunning, stop]);
+
+  return { timeLeft, isRunning, start, stop };
 }

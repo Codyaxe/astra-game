@@ -1,15 +1,10 @@
-"""
-MySQL connection helper.
-Schema is managed externally (already applied to the `constellation_game`
-database) — this module provides pooled connections + query helpers.
-"""
-
+import mysql.connector
 from mysql.connector import pooling
 from config import Config
 
 _pool = pooling.MySQLConnectionPool(
     pool_name="constellation_pool",
-    pool_size=5,
+    pool_size=32,
     host=Config.MYSQL_HOST,
     port=Config.MYSQL_PORT,
     user=Config.MYSQL_USER,
@@ -20,8 +15,17 @@ _pool = pooling.MySQLConnectionPool(
 
 
 def get_connection():
-    """Get a pooled MySQL connection."""
-    return _pool.get_connection()
+    """Get a pooled MySQL connection with fallback to direct connection."""
+    try:
+        return _pool.get_connection()
+    except Exception:
+        return mysql.connector.connect(
+            host=Config.MYSQL_HOST,
+            port=Config.MYSQL_PORT,
+            user=Config.MYSQL_USER,
+            password=Config.MYSQL_PASSWORD,
+            database=Config.MYSQL_DATABASE,
+        )
 
 
 def get_cursor(conn, dictionary: bool = True):

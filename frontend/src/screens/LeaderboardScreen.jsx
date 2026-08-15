@@ -11,15 +11,29 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getLeaderboard(10)
+    getLeaderboard(50)
       .then((res) => setLeaderboard(res.leaderboard || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [player?.id, lastAttemptResult?.attempts_used]);
 
-  const attemptsUsed = lastAttemptResult?.attempts_used || player?.total_attempts_used || 1;
-  const attemptsRemaining = Math.max(0, 3 - attemptsUsed);
-  const bestScore = lastAttemptResult?.best_score ?? player?.best_score ?? 0;
+  const currentPlayerRow = leaderboard.find(
+    (row) => row.player_id === player?.id
+  );
+
+  const attemptsUsed =
+    currentPlayerRow?.attempts_used ??
+    lastAttemptResult?.attempts_used ??
+    player?.total_attempts_used ??
+    0;
+
+const attemptsRemaining = Math.max(0, 3 - attemptsUsed);
+
+const bestScore =
+  currentPlayerRow?.highest_score ??
+  lastAttemptResult?.best_score ??
+  player?.best_score ??
+  0;
 
   return (
     <div className="screen screen--leaderboard">

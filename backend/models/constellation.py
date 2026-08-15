@@ -3,23 +3,17 @@ Constellation model — Linked-list struct parsing and traversal helpers.
 """
 
 import json
-from database.db import get_connection
+from database.db import execute
 
 
 def get_all() -> list[dict]:
-    conn = get_connection()
-    rows = conn.execute("SELECT * FROM constellations ORDER BY id").fetchall()
-    conn.close()
+    rows = execute("SELECT * FROM constellations ORDER BY id")
     return [_parse_row(r) for r in rows]
 
 
 def get_by_id(constellation_id: int) -> dict | None:
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM constellations WHERE id = ?", (constellation_id,)
-    ).fetchone()
-    conn.close()
-    return _parse_row(row) if row else None
+    rows = execute("SELECT * FROM constellations WHERE id = %s", (constellation_id,))
+    return _parse_row(rows[0]) if rows else None
 
 
 def validate_connection(constellation_id: int, from_node_id: int, to_node_id: int) -> bool:

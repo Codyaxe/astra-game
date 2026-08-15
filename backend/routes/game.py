@@ -81,8 +81,17 @@ def submit_attempt():
         return jsonify({"error": "session_id is required"}), 400
 
     session = get_session(session_id)
+
     if not session:
         return jsonify({"error": "Session not found"}), 404
+
+    # A session can only consume ONE attempt.
+    if session["completed_status"] in (1, 2, 3):
+        return jsonify({
+            "error": "This game session has already been finalized.",
+            "session_id": session_id,
+            "attempt_already_used": True,
+        }), 409
 
     constellation = get_constellation(session["constellation_id"])
     time_limit = constellation["time_limit_sec"] if constellation else 30
@@ -107,10 +116,13 @@ def submit_attempt():
         total_clicks=clicks,
         wand_travel_dist=wand_dist,
         recalibration_count=recalibrations,
-        completed_status=status,
     )
 
-    result = finalize_attempt(session_id, attempt_score)
+    result = finalize_attempt(
+    session_id,
+    attempt_score,
+    completed_status=status,
+)
     result["attempt_score"] = attempt_score
     result["completed_status"] = status
 
