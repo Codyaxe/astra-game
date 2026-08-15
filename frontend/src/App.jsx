@@ -8,6 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { getConstellations } from './services/api';
 import { preloadAll } from './utils/audio';
 import { ASSETS } from './data/assets';
+import { DEFAULT_CONSTELLATIONS } from './data/defaultConstellations';
+import { prewarmMediaPipe } from './services/mediaPipeService';
 
 import TitleScreen from './screens/TitleScreen';
 import MenuScreen from './screens/MenuScreen';
@@ -25,15 +27,17 @@ export default function App() {
   const [attemptNumber, setAttemptNumber] = useState(1);
   const [lastAttemptResult, setLastAttemptResult] = useState(null);
 
-  const [constellations, setConstellations] = useState([]);
+  // Initialize with local constellations instantly — NO WAITING / NO DELAY!
+  const [constellations, setConstellations] = useState(DEFAULT_CONSTELLATIONS);
   const [constellationIndex, setConstellationIndex] = useState(0);
 
-  // Preload SFX
+  // Preload SFX + Pre-warm MediaPipe in background on boot
   useEffect(() => {
     preloadAll(ASSETS.sfx);
+    prewarmMediaPipe();
   }, []);
 
-  // Fetch constellations
+  // Async background sync with backend (if backend has newer data)
   useEffect(() => {
     getConstellations()
       .then((res) => {
@@ -41,7 +45,7 @@ export default function App() {
           setConstellations(res.constellations);
         }
       })
-      .catch(console.error);
+      .catch(() => {});
   }, []);
 
   // ---- Screen Navigation Handlers ----

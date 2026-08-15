@@ -11,6 +11,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { GestureDetector } from '../tracking/gestureDetector';
+import { getSharedHands } from '../services/mediaPipeService';
 
 export function useWandGestures({
   enabled = false,
@@ -20,7 +21,6 @@ export function useWandGestures({
   onConnectionCycleComplete, // (fromNode, toNode)
 }) {
   const videoRef = useRef(null);
-  const handsRef = useRef(null);
   const cameraRef = useRef(null);
   const detectorRef = useRef(new GestureDetector());
 
@@ -106,17 +106,8 @@ export function useWandGestures({
     let cancelled = false;
 
     async function initCamera() {
-      // eslint-disable-next-line no-undef
-      const hands = new window.Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
-      });
-
-      hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.7,
-        minTrackingConfidence: 0.5,
-      });
+      const hands = getSharedHands();
+      if (!hands) return;
 
       hands.onResults(onResults);
 
@@ -127,11 +118,10 @@ export function useWandGestures({
             await hands.send({ image: videoRef.current });
           }
         },
-        width: 1280,
-        height: 720,
+        width: 640,
+        height: 480,
       });
 
-      handsRef.current = hands;
       cameraRef.current = camera;
       await camera.start();
       if (!cancelled) setIsReady(true);
