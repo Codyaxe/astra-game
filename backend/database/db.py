@@ -83,13 +83,40 @@ def get_leaderboard(limit: int = 10):
 def init_db():
     """
     Startup sanity check — confirms the pool can reach MySQL.
-    Schema itself is applied manually via the SQL file, not here.
+    Also migrates any missing columns for extra registration data.
     """
     conn = get_connection()
     try:
         cursor = conn.cursor()
+        # Verify connection
         cursor.execute("SELECT 1")
         cursor.fetchone()
+
+        # Check and add registration fields if they don't exist
+        try:
+            cursor.execute("SHOW COLUMNS FROM players")
+            existing_columns = [col[0] for col in cursor.fetchall()]
+            for col_name, col_def in [
+                ('mi', "VARCHAR(10) DEFAULT ''"),
+                ('department', "VARCHAR(50) DEFAULT ''"),
+                ('year_level', "VARCHAR(20) DEFAULT ''"),
+                ('section', "VARCHAR(50) DEFAULT ''")
+            ]:
+                if col_name not in existing_columns:
+                    print(f"[DB MIGRATION] Adding column '{col_name}' to players table")
+                    cursor.execute(f"ALTER TABLE players ADD COLUMN {col_name} {col_def}")
+            conn.commit()
+
+            # Check and add accuracy column to game_sessions table if it doesn't exist
+            cursor.execute("SHOW COLUMNS FROM game_sessions")
+            existing_session_columns = [col[0] for col in cursor.fetchall()]
+            if 'accuracy' not in existing_session_columns:
+                print("[DB MIGRATION] Adding column 'accuracy' to game_sessions table")
+                cursor.execute("ALTER TABLE game_sessions ADD COLUMN accuracy DOUBLE DEFAULT 100.0")
+                conn.commit()
+        except Exception as migration_exc:
+            print(f"[DB MIGRATION WARNING] Failed to migrate tables: {migration_exc}")
+
         cursor.close()
     finally:
         conn.close()

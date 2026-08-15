@@ -27,7 +27,7 @@ def update_session(session_id: int, **kwargs) -> None:
     allowed = {
         "score", "time_elapsed_ms", "wrong_connections",
         "total_clicks", "wand_travel_dist", "recalibration_count",
-        "completed_status",
+        "completed_status", "accuracy",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:

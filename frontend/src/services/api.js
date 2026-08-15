@@ -21,7 +21,7 @@ async function _fetch(endpoint, options = {}) {
 
 // ---- Auth & Registration Flow ----
 
-export function registerPlayer({ firstName, lastName, srCode, course, contactNumber = '' }) {
+export function registerPlayer({ firstName, lastName, srCode, course, contactNumber = '', mi = '', department = '', yearLevel = '', section = '' }) {
   return _fetch('/auth/register', {
     method: 'POST',
     body: JSON.stringify({
@@ -30,11 +30,15 @@ export function registerPlayer({ firstName, lastName, srCode, course, contactNum
       sr_code: srCode,
       course,
       contact_number: contactNumber,
+      mi,
+      department,
+      year_level: yearLevel,
+      section,
     }),
   });
 }
 
-export function mobileRegister({ firstName, lastName, srCode, course, contactNumber = '' }) {
+export function mobileRegister({ firstName, lastName, srCode, course, contactNumber = '', mi = '', department = '', yearLevel = '', section = '' }) {
   return _fetch('/auth/mobile-register', {
     method: 'POST',
     body: JSON.stringify({
@@ -43,6 +47,10 @@ export function mobileRegister({ firstName, lastName, srCode, course, contactNum
       sr_code: srCode,
       course,
       contact_number: contactNumber,
+      mi,
+      department,
+      year_level: yearLevel,
+      section,
     }),
   });
 }

@@ -121,18 +121,21 @@ def submit_game():
     wand_travel_dist = data.get("wand_travel_dist") or data.get("distance") or 0.0
     completed_status = data.get("completed_status", 1)
     time_limit_sec = data.get("time_limit_sec", 30)
+    accuracy = float(data.get("accuracy", 100.0) if data.get("accuracy") is not None else 100.0)
+    completed_connections = int(data.get("completed_connections", 0))
+    total_connections = int(data.get("total_connections", 0))
 
-    # Disqualified (2) or Force Exited (3) -> 0 points
-    if completed_status in (2, 3):
-        score = 0.0
-    else:
-        score = compute_score(
-            wrong_connections=wrong_connections,
-            total_clicks=total_clicks,
-            time_elapsed_ms=time_elapsed_ms,
-            wand_travel_dist=wand_travel_dist,
-            time_limit_sec=time_limit_sec,
-        )
+    # Calculate score using completion ratio
+    score = compute_score(
+        wrong_connections=wrong_connections,
+        total_clicks=total_clicks,
+        time_elapsed_ms=time_elapsed_ms,
+        wand_travel_dist=wand_travel_dist,
+        time_limit_sec=time_limit_sec,
+        accuracy=accuracy,
+        completed_connections=completed_connections,
+        total_connections=total_connections,
+    )
 
     if session_id:
         update_session(
@@ -143,6 +146,7 @@ def submit_game():
             total_clicks=total_clicks,
             wand_travel_dist=wand_travel_dist,
             recalibration_count=0,
+            accuracy=accuracy,
         )
         result = finalize_attempt(
             session_id,

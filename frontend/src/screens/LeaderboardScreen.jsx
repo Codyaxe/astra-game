@@ -29,6 +29,34 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
     setCurrentPage(1);
   }, [searchQuery]);
 
+  // Idle timeout: automatically go back to Title Screen (which redirects to scanner) after 15s of inactivity
+  useEffect(() => {
+    let timeoutId;
+    
+    function resetTimeout() {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        console.log('[ASTRA] Leaderboard idle timeout. Returning to scanner...');
+        onReturnToTitle();
+      }, 15000);
+    }
+
+    resetTimeout();
+
+    window.addEventListener('mousemove', resetTimeout);
+    window.addEventListener('mousedown', resetTimeout);
+    window.addEventListener('keypress', resetTimeout);
+    window.addEventListener('touchstart', resetTimeout);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetTimeout);
+      window.removeEventListener('mousedown', resetTimeout);
+      window.removeEventListener('keypress', resetTimeout);
+      window.removeEventListener('touchstart', resetTimeout);
+    };
+  }, [onReturnToTitle]);
+
   const currentPlayerRow = leaderboard.find(
     (row) => row.player_id === player?.id
   );

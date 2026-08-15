@@ -1,5 +1,5 @@
 /**
- * ChallengeScreen.jsx — Constellation Tracing Gameplay Screen (Clean & Single-Source)
+ * ChallengeScreen.jsx â€” Constellation Tracing Gameplay Screen (Clean & Single-Source)
  *
  * Implements:
  * 1. Automatic path-tracing on star glide/hover + click fallback
@@ -49,11 +49,44 @@ export default function ChallengeScreen({
   const currentSnappedRef = useRef(null);
   const lastSnappedNodeIdRef = useRef(null);
   const sessionStartedRef = useRef(false);
+  // Accuracy tracking: collect pointer positions between each star-to-star connection
+  const tracedPointsRef = useRef([]);          // [{x,y}] for current in-progress segment
+  const connectionAccuraciesRef = useRef([]);  // accuracy per completed connection
+  const [solvedAccuracy, setSolvedAccuracy] = useState(null);
 
   // Model
   const constellationList = useMemo(() => {
     return constellationData ? new ConstellationLinkedList(constellationData) : null;
   }, [constellationData]);
+
+  /**
+   * Compute how accurately the player traced the segment from nodeA to nodeB.
+   * Projects each traced point onto the line segment and averages perpendicular distance.
+   * Returns accuracy between 0.0 and 100.0.
+   */
+  function computeSegmentAccuracy(points, fromNode, toNode) {
+    if (!points || points.length < 2) return 100.0; // no trace data = assume perfect
+    const ax = fromNode.x, ay = fromNode.y;
+    const bx = toNode.x,  by = toNode.y;
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    const TOLERANCE = 0.08; // 8% of normalized screen width
+
+    let totalDist = 0;
+    for (const p of points) {
+      let dist;
+      if (lenSq === 0) {
+        dist = Math.hypot(p.x - ax, p.y - ay);
+      } else {
+        const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / lenSq));
+        const projX = ax + t * dx, projY = ay + t * dy;
+        dist = Math.hypot(p.x - projX, p.y - projY);
+      }
+      totalDist += dist;
+    }
+    const avgDist = totalDist / points.length;
+    return Math.max(0, Math.min(100, (1 - avgDist / TOLERANCE) * 100));
+  }
 
   // Setup head star on mount / constellation change
   useEffect(() => {
@@ -67,6 +100,9 @@ export default function ChallengeScreen({
       isCompletedRef.current = false;
       setIsCompleted(false);
       setSolvedScore(null);
+      setSolvedAccuracy(null);
+      tracedPointsRef.current = [];
+      connectionAccuraciesRef.current = [];
     }
   }, [constellationList]);
 
@@ -74,12 +110,17 @@ export default function ChallengeScreen({
   const handleTimerExpire = useCallback(async () => {
     if (isCompletedRef.current) return;
     isCompletedRef.current = true;
-    console.warn('[ASTRA] ⏳ Time Expired! Disqualifying attempt (Score: 0.0)...');
+    console.warn('[ASTRA] â³ Time Expired! Disqualifying attempt (Score: 0.0)...');
     playSfx('timerEnd');
     const elapsed = Date.now() - startTimeRef.current;
     const currentSid = sessionIdRef.current || sessionId;
     if (currentSid) {
       try {
+        const expiredAccuracy = connectionAccuraciesRef.current.length > 0
+          ? Math.round((connectionAccuraciesRef.current.reduce((a, b) => a + b, 0) / connectionAccuraciesRef.current.length) * 10) / 10
+          : 0.0;
+        setSolvedAccuracy(expiredAccuracy);
+        
         const res = await submitAttempt(currentSid, {
           time_elapsed_ms: elapsed,
           wrong_connections: wrongRef.current,
@@ -87,8 +128,11 @@ export default function ChallengeScreen({
           wand_travel_dist: wandTravelDistRef.current,
           recalibration_count: 0,
           completed_status: 2, // Disqualified
+          completed_connections: connectionsRef.current.length,
+          total_connections: constellationList ? constellationList.getTotalRequiredConnections() : 0,
+          accuracy: expiredAccuracy,
         });
-        console.log('[ASTRA] 🛑 Disqualified server response:', res);
+        console.log('[ASTRA] ðŸ›‘ Disqualified server response:', res);
         onDisqualified?.(res);
         return;
       } catch (e) {
@@ -101,8 +145,6 @@ export default function ChallengeScreen({
   const timeLimit = constellationList?.timeLimitSec || 30;
   const { timeLeft, start: startTimer } = useGameTimer(timeLimit, handleTimerExpire);
 
-  const lastMistakeTimeRef = useRef(0);
-
   // Connection Handler (used by hover glide AND mouse/wand clicks)
   const tryConnectToNode = useCallback((targetNode) => {
     if (isCompletedRef.current || !constellationList || !targetNode) return;
@@ -110,21 +152,19 @@ export default function ChallengeScreen({
     const currentActive = activeNodeRef.current;
     if (!currentActive) return;
 
-    // Ignore if already at the current active star
+    // Ignore if already at the target star
     if (currentActive.id === targetNode.id) return;
-
-    // Ignore if targetNode is already part of completed connections (do not penalize backtrack)
-    const isAlreadyConnected = connectionsRef.current.some(
-      (c) => c.from.id === targetNode.id || c.to.id === targetNode.id
-    );
-    if (isAlreadyConnected) return;
 
     // Check if targetNode is the valid next star in sequence
     const isValid = constellationList.isValidNextStep(currentActive.id, targetNode.id);
-    console.log(`[ASTRA] Attempting: ${currentActive.label || currentActive.id} ──> ${targetNode.label || targetNode.id} | Valid: ${isValid}`);
+    console.log(`[ASTRA] Attempting: ${currentActive.label || currentActive.id} â”€â”€> ${targetNode.label || targetNode.id} | Valid: ${isValid}`);
 
     if (isValid) {
-      // 1. Success!
+      // 1. Success! Compute accuracy for this segment using traced points
+      const segAccuracy = computeSegmentAccuracy(tracedPointsRef.current, currentActive, targetNode);
+      connectionAccuraciesRef.current.push(segAccuracy);
+      tracedPointsRef.current = []; // reset for next segment
+
       playSfx('correct');
       clicksRef.current += 1;
       setTotalClicks(clicksRef.current);
@@ -138,7 +178,7 @@ export default function ChallengeScreen({
       setActiveNode(targetNode);
 
       const totalRequired = constellationList.getTotalRequiredConnections();
-      console.log(`%c[ASTRA] ✅ Connected: ${currentActive.label || currentActive.id} ──> ${targetNode.label || targetNode.id} (${updatedConns.length}/${totalRequired})`, 'color: #4ade80; font-weight: bold;');
+      console.log(`%c[ASTRA] âœ… Connected: ${currentActive.label || currentActive.id} â”€â”€> ${targetNode.label || targetNode.id} (${updatedConns.length}/${totalRequired})`, 'color: #4ade80; font-weight: bold;');
 
       // 2. Check if constellation is 100% complete
       if (updatedConns.length >= totalRequired) {
@@ -147,11 +187,18 @@ export default function ChallengeScreen({
 
         const elapsed = Date.now() - startTimeRef.current;
         const currentSid = sessionIdRef.current || sessionId;
-        console.log(`%c[ASTRA] 🎉 ${constellationList.name} Fully Completed in ${(elapsed/1000).toFixed(1)}s! Submitting...`, 'color: #facc15; font-size: 14px; font-weight: bold;');
+        console.log(`%c[ASTRA] ðŸŽ‰ ${constellationList.name} Fully Completed in ${(elapsed/1000).toFixed(1)}s! Submitting...`, 'color: #facc15; font-size: 14px; font-weight: bold;');
 
         setTimeout(async () => {
           if (currentSid) {
             try {
+              // Compute overall tracing accuracy from all segments
+              const accuracies = connectionAccuraciesRef.current;
+              const overallAccuracy = accuracies.length > 0
+                ? Math.round((accuracies.reduce((a, b) => a + b, 0) / accuracies.length) * 10) / 10
+                : 100.0;
+              setSolvedAccuracy(overallAccuracy);
+              console.log(`%c[ASTRA] Tracing Accuracy: ${overallAccuracy}%`, 'color: #a78bfa; font-weight: bold;');
               const res = await submitAttempt(currentSid, {
                 time_elapsed_ms: elapsed,
                 wrong_connections: wrongRef.current,
@@ -159,10 +206,13 @@ export default function ChallengeScreen({
                 wand_travel_dist: wandTravelDistRef.current,
                 recalibration_count: 0,
                 completed_status: 1, // Completed
+                accuracy: overallAccuracy,
+                completed_connections: totalRequired,
+                total_connections: totalRequired,
               });
               const score = res.attempt_score ?? res.score ?? 90;
               setSolvedScore(score);
-              console.log(`%c[ASTRA SCORE RESULT] 🏆 Score: ${score} pts | Attempts Used: ${res.attempts_used} | Best: ${res.best_score}`, 'color: #4ade80; font-size: 16px; font-weight: bold;');
+              console.log(`%c[ASTRA SCORE RESULT] ðŸ† Score: ${score} pts | Attempts Used: ${res.attempts_used} | Best: ${res.best_score}`, 'color: #4ade80; font-size: 16px; font-weight: bold;');
               onComplete?.(res);
               return;
             } catch (e) {
@@ -174,15 +224,11 @@ export default function ChallengeScreen({
         }, 1200);
       }
     } else {
-      // 3. Wrong star reached (Debounced by 500ms so brushing past doesn't spam penalties)
-      const now = Date.now();
-      if (now - lastMistakeTimeRef.current > 500) {
-        lastMistakeTimeRef.current = now;
-        wrongRef.current += 1;
-        setWrongConnections(wrongRef.current);
-        playSfx('wrong');
-        console.warn(`[ASTRA] ❌ Wrong connection to ${targetNode.label || targetNode.id}! Expected next star after ${currentActive.label || currentActive.id}. Total mistakes: ${wrongRef.current}`);
-      }
+      // 3. Wrong star reached
+      wrongRef.current += 1;
+      setWrongConnections(wrongRef.current);
+      playSfx('wrong');
+      console.warn(`[ASTRA] âŒ Wrong connection to ${targetNode.label || targetNode.id}! Expected next star after ${currentActive.label || currentActive.id}. Total mistakes: ${wrongRef.current}`);
     }
   }, [constellationList, sessionId, onComplete]);
 
@@ -211,7 +257,7 @@ export default function ChallengeScreen({
 
     if (snap?.snapped && snap?.node && snap.node.id !== lastSnappedNodeIdRef.current) {
       lastSnappedNodeIdRef.current = snap.node.id;
-      console.log(`[ASTRA] 🎯 Pointer reached star: ${snap.node.label || snap.node.id}`);
+      console.log(`[ASTRA] ðŸŽ¯ Pointer reached star: ${snap.node.label || snap.node.id}`);
       tryConnectToNode(snap.node);
     } else if (!snap?.snapped) {
       lastSnappedNodeIdRef.current = null;
@@ -230,6 +276,14 @@ export default function ChallengeScreen({
         effectivePointer.y
       );
       wandTravelDistRef.current += d * 1000;
+    }
+    // Collect for accuracy if NOT yet completed
+    if (!isCompletedRef.current && effectivePointer) {
+      tracedPointsRef.current = [...(tracedPointsRef.current || []), { x: effectivePointer.x, y: effectivePointer.y }];
+      // Cap at 500 points per segment to keep memory manageable
+      if (tracedPointsRef.current.length > 500) {
+        tracedPointsRef.current = tracedPointsRef.current.slice(-500);
+      }
     }
     prevPointerRef.current = effectivePointer;
   }, [effectivePointer]);
@@ -336,13 +390,16 @@ export default function ChallengeScreen({
             textShadow: '0 0 25px rgba(74, 222, 128, 0.9)',
             marginBottom: '0.5rem',
           }}>
-            ✦ {constellationList?.name} Solved!
+            âœ¦ {constellationList?.name} Solved!
           </h2>
-          <p style={{ color: '#facc15', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-            Score: {solvedScore !== null ? `${solvedScore} pts` : 'Calculating…'}
+          <p style={{ color: '#facc15', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+            Score: {solvedScore !== null ? `${solvedScore} pts` : 'Calculating...'}
+          </p>
+          <p style={{ color: '#a78bfa', fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+            Tracing Accuracy: {solvedAccuracy !== null ? `${solvedAccuracy.toFixed(1)}%` : 'Calculating...'}
           </p>
           <p style={{ color: '#94a3b8', fontSize: '1rem' }}>
-            Loading next constellation…
+            Loading next constellation...
           </p>
         </div>
       )}

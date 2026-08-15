@@ -1,16 +1,16 @@
 /**
  * TitleScreen.jsx — Idle / attract screen.
  *
- * Animated star-field background + game logo.
- * Tapping or any interaction transitions to the Menu screen.
- * Auto-returns here when no player activity is detected.
+ * Animated star-field + game logo. 
+ * The game only starts when QR ticket 2 is scanned and the player
+ * is redirected here with ?autostart=true. No tap/play interaction.
  */
 
 import { useEffect, useRef } from 'react';
 
 const STAR_COUNT = 220;
 
-export default function TitleScreen({ onStart }) {
+export default function TitleScreen() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -59,13 +59,13 @@ export default function TitleScreen({ onStart }) {
   }, []);
 
   return (
-    <div className="screen screen--title" onClick={onStart}>
+    <div className="screen screen--title">
       <canvas ref={canvasRef} className="title-canvas" />
       <div className="title-content">
-        {/* TODO: replace with <img src={ASSETS.images.logo} /> */}
-        <h1 className="title-logo">✦ Constellation Tracer</h1>
-        <p className="title-cta">Tap anywhere to begin</p>
+        <h1 className="title-logo">Constellation Tracer</h1>
+        <p className="title-cta">Scan your ticket to play</p>
+        <p className="title-hint">Present your QR ticket at the scanning station</p>
       </div>
     </div>
   );
-}
+}

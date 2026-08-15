@@ -22,6 +22,10 @@ def create_player(
     registration_source: str = "ocr",
     id_picture_path: str = None,
     ocr_raw_text: str = None,
+    mi: str = "",
+    department: str = "",
+    year_level: str = "",
+    section: str = "",
 ) -> tuple[int, str]:
     """
     Insert a new player and generate a unique QR ticket code.
@@ -38,9 +42,10 @@ def create_player(
         INSERT INTO players (
             first_name, last_name, sr_code, course,
             contact_number, registration_source, id_picture_path,
-            ocr_raw_text, qr_ticket_code, total_attempts_used, best_score
+            ocr_raw_text, qr_ticket_code, total_attempts_used, best_score,
+            mi, department, year_level, section
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0.0)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0.0, %s, %s, %s, %s)
     """
     params = (
         first_name,
@@ -52,6 +57,10 @@ def create_player(
         id_picture_path,
         ocr_raw_text,
         qr_ticket_code,
+        mi,
+        department,
+        year_level,
+        section,
     )
     player_id = execute(query, params, commit=True)
     return player_id, qr_ticket_code
@@ -77,20 +86,44 @@ def get_player_by_ticket(qr_ticket_code: str) -> dict | None:
  
 def increment_attempt_and_update_best_score(player_id: int, new_score: float) -> dict:
     """
-    Increment total_attempts_used (capped at MAX_ATTEMPTS) and update
-    best_score if new_score beats the current best.
+    Update best_score and total_attempts_used by dynamically calculating averages 
+    across all constellations in the database.
     """
     rows = execute("SELECT * FROM players WHERE id = %s", (player_id,))
     if not rows:
         raise ValueError("Player not found")
- 
+
     player = rows[0]
-    current_attempts = player["total_attempts_used"]
     current_best = float(player["best_score"])
- 
-    new_attempts = min(MAX_ATTEMPTS, current_attempts + 1)
-    retained_best = max(current_best, new_score)
- 
+
+    # 1. Fetch total constellations count in the database
+    const_count_row = execute("SELECT COUNT(*) as count FROM constellations")
+    total_constellations = max(1, const_count_row[0]["count"] if const_count_row else 1)
+
+    # 2. Fetch sum of scores grouped by attempt_number for this player
+    avg_query = """
+        SELECT attempt_number, SUM(score) as total_score
+        FROM game_sessions
+        WHERE player_id = %s
+        GROUP BY attempt_number
+    """
+    attempt_sums = execute(avg_query, (player_id,))
+
+    # 3. Calculate max average score and maximum attempt number
+    best_avg = 0.0
+    attempts_used = 0
+    for attempt in attempt_sums:
+        att_num = attempt["attempt_number"]
+        avg = float(attempt["total_score"]) / total_constellations
+        if avg > best_avg:
+            best_avg = avg
+        if att_num > attempts_used:
+            attempts_used = att_num
+
+    # Ensure attempts_used is sensible and capped
+    attempts_used = min(MAX_ATTEMPTS, max(attempts_used, player["total_attempts_used"]))
+    best_avg = round(best_avg, 2)
+
     execute(
         """
         UPDATE players
@@ -98,14 +131,14 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
             best_score = %s
         WHERE id = %s
         """,
-        (new_attempts, retained_best, player_id),
+        (attempts_used, best_avg, player_id),
         commit=True,
     )
- 
+
     return {
         "player_id": player_id,
-        "attempts_used": new_attempts,
-        "attempts_remaining": max(0, MAX_ATTEMPTS - new_attempts),
-        "best_score": retained_best,
-        "is_new_high_score": new_score > current_best,
+        "attempts_used": attempts_used,
+        "attempts_remaining": max(0, MAX_ATTEMPTS - attempts_used),
+        "best_score": best_avg,
+        "is_new_high_score": best_avg > current_best,
     }

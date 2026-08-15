@@ -1,5 +1,7 @@
 /**
- * useWandGestures.js — Clean, High-Performance MediaPipe Wand Tracking
+ * useWandGestures.js — Clean, Single-Mount MediaPipe Wand Tracking
+ *
+ * Camera and MediaPipe Hands are initialized ONCE on mount (no infinite restart loop).
  */
 
 import { useRef, useState, useEffect, useCallback } from 'react';
@@ -14,7 +16,7 @@ export function useWandGestures({
   const cameraRef = useRef(null);
   const handsRef = useRef(null);
   const detectorRef = useRef(new GestureDetector());
-  const smootherRef = useRef(new MotionSmoother(1.2, 0.05, 1.0));
+  const smootherRef = useRef(new MotionSmoother(1.2, 0.015, 1.0));
   const onCompleteRef = useRef(onConnectionCycleComplete);
 
   // Keep callback reference updated without triggering re-initialization
@@ -31,26 +33,13 @@ export function useWandGestures({
   const holdRef = useRef(false);
   const drawRef = useRef(false);
   const lastActionTimeRef = useRef(0);
-  const lastDetectedTimeRef = useRef(0);
-  const lastWarnTimeRef = useRef(0);
 
   const onResults = useCallback((results) => {
-    const now = performance.now();
-
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-      if (now - lastWarnTimeRef.current > 600) {
-        lastWarnTimeRef.current = now;
-        console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
-      }
-      // If hand has been absent for more than 600ms, cleanly reset and hide cursor
-      if (lastDetectedTimeRef.current > 0 && now - lastDetectedTimeRef.current > 600) {
-        smootherRef.current.reset();
-        setPointer(null);
-      }
+      smootherRef.current.reset();
+      setPointer(null);
       return;
     }
-
-    lastDetectedTimeRef.current = now;
 
     const landmarks = results.multiHandLandmarks[0];
     const detection = detectorRef.current.update(landmarks);
@@ -58,16 +47,11 @@ export function useWandGestures({
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
 
-    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter (mirror X for natural mirror movement)
-    const smoothedPoint = smootherRef.current.smooth({
-      x: 1 - point.x,
-      y: point.y,
-      z: point.z,
-    }, now);
+    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
+    const smoothedPoint = smootherRef.current.smooth(point, Date.now());
+    setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
 
-    if (smoothedPoint) {
-      setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
-    }
+    const now = Date.now();
 
     // Forward / Back Tilt (Draw Line State Machine)
     if (isForwardTilt && !holdRef.current && now - lastActionTimeRef.current > 300) {
@@ -88,21 +72,27 @@ export function useWandGestures({
       onCompleteRef.current?.();
       setTimeout(() => setGestureStatus('Neutral'), 600);
     }
-  }, []);
+  }, []); // Static callback — never changes identity
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
 
     async function initCamera() {
-      if (!videoRef.current) return;
+      // Wait for video element to attach if not ready
+      if (!videoRef.current) {
+        setTimeout(() => {
+          if (!cancelled) initCamera();
+        }, 100);
+        return;
+      }
 
-      if (typeof window === 'undefined' || !window.Hands) {
+      if (typeof window === 'undefined' || !window.Hands || !window.Camera) {
         console.warn('[ASTRA] MediaPipe library scripts not ready on window');
         return;
       }
 
-      console.log('[ASTRA] 📷 Initializing MediaPipe Hands...');
+      console.log('[ASTRA] 📷 Initializing MediaPipe Hands & Camera stream (Single-Mount)...');
 
       // eslint-disable-next-line no-undef
       const hands = new window.Hands({
@@ -111,71 +101,28 @@ export function useWandGestures({
 
       hands.setOptions({
         maxNumHands: 1,
-        modelComplexity: 0, // Lite model for ultra-low latency inference
-        minDetectionConfidence: 0.5,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.6,
         minTrackingConfidence: 0.5,
       });
 
       hands.onResults(onResults);
       handsRef.current = hands;
 
-      // Request camera stream
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 60, min: 30 },
-          facingMode: 'user',
+      // eslint-disable-next-line no-undef
+      const camera = new window.Camera(videoRef.current, {
+        onFrame: async () => {
+          if (!cancelled && videoRef.current && handsRef.current) {
+            await handsRef.current.send({ image: videoRef.current });
+          }
         },
+        width: 1280,
+        height: 720,
       });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      let isProcessing = false;
-      let frameCallbackId = null;
-
-      const processVideoFrame = async () => {
-        if (cancelled) return;
-
-        if (!isProcessing && videoRef.current && videoRef.current.readyState >= 2 && handsRef.current) {
-          isProcessing = true;
-          try {
-            await handsRef.current.send({ image: videoRef.current });
-          } catch (e) {
-            console.error('[ASTRA] Frame processing error:', e);
-          } finally {
-            isProcessing = false;
-          }
-        }
-
-        if (videoRef.current && 'requestVideoFrameCallback' in videoRef.current) {
-          frameCallbackId = videoRef.current.requestVideoFrameCallback(processVideoFrame);
-        } else {
-          frameCallbackId = requestAnimationFrame(processVideoFrame);
-        }
-      };
-
-      if (videoRef.current && 'requestVideoFrameCallback' in videoRef.current) {
-        frameCallbackId = videoRef.current.requestVideoFrameCallback(processVideoFrame);
-      } else {
-        frameCallbackId = requestAnimationFrame(processVideoFrame);
-      }
-
-      cameraRef.current = {
-        stop: () => {
-          if (videoRef.current && 'cancelVideoFrameCallback' in videoRef.current && frameCallbackId) {
-            videoRef.current.cancelVideoFrameCallback(frameCallbackId);
-          } else if (frameCallbackId) {
-            cancelAnimationFrame(frameCallbackId);
-          }
-          stream.getTracks().forEach((track) => track.stop());
-        },
-      };
-
-      console.log('[ASTRA] 📷 Video tracking engine started successfully.');
+      cameraRef.current = camera;
+      await camera.start();
+      console.log('[ASTRA] 📷 Webcam camera stream running smoothly!');
       if (!cancelled) setIsReady(true);
     }
 

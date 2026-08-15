@@ -27,13 +27,13 @@ ID_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "ids")
 os.makedirs(ID_UPLOAD_DIR, exist_ok=True)
  
  
-def _create_or_fetch_existing(first_name, last_name, sr_code, course, contact, source):
+def _create_or_fetch_existing(first_name, last_name, sr_code, course, contact, source, mi="", department="", year_level="", section=""):
     """
     Shared insert logic for /register and /mobile-register.
     Handles the race where two requests for the same sr_code land at
     once: the first INSERT wins, the second hits the UNIQUE constraint
     on sr_code and we just fall back to reading the row that won.
- 
+
     Returns (player_dict, is_new).
     """
     try:
@@ -44,11 +44,25 @@ def _create_or_fetch_existing(first_name, last_name, sr_code, course, contact, s
             course=course,
             contact_number=contact,
             registration_source=source,
+            mi=mi,
+            department=department,
+            year_level=year_level,
+            section=section
         )
         return get_player_by_id(player_id), True
     except IntegrityError:
         existing = get_player_by_sr_code(sr_code)
         if existing:
+            # Dynamically update details if any are empty
+            update_fields = {}
+            for field, val in [("mi", mi), ("department", department), ("year_level", year_level), ("section", section)]:
+                if val and not existing.get(field):
+                    update_fields[field] = val
+            if update_fields:
+                set_clause = ", ".join([f"{k} = %s" for k in update_fields.keys()])
+                params = list(update_fields.values()) + [existing["id"]]
+                execute(f"UPDATE players SET {set_clause} WHERE id = %s", tuple(params), commit=True)
+                existing = get_player_by_id(existing["id"])
             return existing, False
         # Extremely unlikely: constraint fired on qr_ticket_code collision,
         # not sr_code. Re-raise so it surfaces as a 500 instead of a
@@ -62,17 +76,32 @@ def register():
     Standard OCR-assisted or direct kiosk registration.
     """
     data = request.get_json(silent=True) or {}
-    first_name = data.get("first_name", "").strip()
-    last_name = data.get("last_name", "").strip()
-    sr_code = data.get("sr_code", "").strip()
+    first_name = data.get("first_name", "").strip() or data.get("firstName", "").strip()
+    last_name = data.get("last_name", "").strip() or data.get("lastName", "").strip()
+    sr_code = data.get("sr_code", "").strip() or data.get("srCode", "").strip()
     course = data.get("course", "").strip()
-    contact = data.get("contact_number", "").strip() or None
+    contact = data.get("contact_number", "").strip() or data.get("contactNumber", "").strip() or None
+    mi = data.get("mi", "").strip()
+    department = data.get("department", "").strip() or data.get("dept", "").strip()
+    year_level = data.get("year_level", "").strip() or data.get("yearLevel", "").strip()
+    section = data.get("section", "").strip()
  
     if not first_name or not last_name or not sr_code or not course:
         return jsonify({"error": "first_name, last_name, sr_code, and course are required"}), 400
  
     existing = get_player_by_sr_code(sr_code)
     if existing:
+        # Dynamically update details if any are empty
+        update_fields = {}
+        for field, val in [("mi", mi), ("department", department), ("year_level", year_level), ("section", section)]:
+            if val and not existing.get(field):
+                update_fields[field] = val
+        if update_fields:
+            set_clause = ", ".join([f"{k} = %s" for k in update_fields.keys()])
+            params = list(update_fields.values()) + [existing["id"]]
+            execute(f"UPDATE players SET {set_clause} WHERE id = %s", tuple(params), commit=True)
+            existing = get_player_by_id(existing["id"])
+
         return jsonify({
             "player": existing,
             "attempts_remaining": max(0, MAX_ATTEMPTS - existing["total_attempts_used"]),
@@ -81,7 +110,8 @@ def register():
  
     try:
         player, is_new = _create_or_fetch_existing(
-            first_name, last_name, sr_code, course, contact, "ocr"
+            first_name, last_name, sr_code, course, contact, "ocr",
+            mi=mi, department=department, year_level=year_level, section=section
         )
     except IntegrityError:
         return jsonify({"error": "Registration conflict, please retry"}), 409
@@ -106,17 +136,32 @@ def mobile_register():
     a downloadable QR ticket.
     """
     data = request.get_json(silent=True) or {}
-    first_name = data.get("first_name", "").strip()
-    last_name = data.get("last_name", "").strip()
-    sr_code = data.get("sr_code", "").strip()
+    first_name = data.get("first_name", "").strip() or data.get("firstName", "").strip()
+    last_name = data.get("last_name", "").strip() or data.get("lastName", "").strip()
+    sr_code = data.get("sr_code", "").strip() or data.get("srCode", "").strip()
     course = data.get("course", "").strip()
-    contact = data.get("contact_number", "").strip() or None
+    contact = data.get("contact_number", "").strip() or data.get("contactNumber", "").strip() or None
+    mi = data.get("mi", "").strip()
+    department = data.get("department", "").strip() or data.get("dept", "").strip()
+    year_level = data.get("year_level", "").strip() or data.get("yearLevel", "").strip()
+    section = data.get("section", "").strip()
  
     if not first_name or not last_name or not sr_code or not course:
         return jsonify({"error": "All required fields must be filled"}), 400
  
     existing = get_player_by_sr_code(sr_code)
     if existing:
+        # Dynamically update details if any are empty
+        update_fields = {}
+        for field, val in [("mi", mi), ("department", department), ("year_level", year_level), ("section", section)]:
+            if val and not existing.get(field):
+                update_fields[field] = val
+        if update_fields:
+            set_clause = ", ".join([f"{k} = %s" for k in update_fields.keys()])
+            params = list(update_fields.values()) + [existing["id"]]
+            execute(f"UPDATE players SET {set_clause} WHERE id = %s", tuple(params), commit=True)
+            existing = get_player_by_id(existing["id"])
+
         return jsonify({
             "player": existing,
             "qr_ticket_code": existing["qr_ticket_code"],
@@ -127,7 +172,8 @@ def mobile_register():
  
     try:
         player, is_new = _create_or_fetch_existing(
-            first_name, last_name, sr_code, course, contact, "mobile_qr"
+            first_name, last_name, sr_code, course, contact, "mobile_qr",
+            mi=mi, department=department, year_level=year_level, section=section
         )
     except IntegrityError:
         return jsonify({"error": "Registration conflict, please retry"}), 409
