@@ -6,6 +6,7 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { GestureDetector } from '../tracking/gestureDetector';
+import { MotionSmoother } from '../tracking/motionSmoothing';
 
 export function useWandGestures({
   enabled = true,
@@ -15,6 +16,7 @@ export function useWandGestures({
   const cameraRef = useRef(null);
   const handsRef = useRef(null);
   const detectorRef = useRef(new GestureDetector());
+  const smootherRef = useRef(new MotionSmoother(1.2, 0.015, 1.0));
   const onCompleteRef = useRef(onConnectionCycleComplete);
 
   // Keep callback reference updated without triggering re-initialization
@@ -34,6 +36,7 @@ export function useWandGestures({
 
   const onResults = useCallback((results) => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      smootherRef.current.reset();
       setPointer(null);
       return;
     }
@@ -43,7 +46,10 @@ export function useWandGestures({
     if (!detection) return;
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
-    setPointer({ x: point.x, y: point.y, z: point.z });
+
+    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
+    const smoothedPoint = smootherRef.current.smooth(point, Date.now());
+    setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
 
     const now = Date.now();
 
