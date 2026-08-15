@@ -1,0 +1,8 @@
+flask
+flask-cors
+pillow
+pytesseract
+easyocr
+opencv-python
+numpy
+mysql-connector-python
