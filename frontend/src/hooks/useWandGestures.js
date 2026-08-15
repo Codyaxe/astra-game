@@ -131,7 +131,7 @@ export function useWandGestures({
       hands.setOptions({
         maxNumHands: 1,
         modelComplexity: 0, // Lite model for lowest latency
-        minDetectionConfidence: 0.5,
+        minDetectionConfidence: 0.3,
         minTrackingConfidence: 0.5,
       });
 
