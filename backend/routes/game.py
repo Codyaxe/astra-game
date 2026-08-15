@@ -38,11 +38,32 @@ def start_game():
 
     player = get_player_by_id(player_id)
     if not player:
-        return jsonify({"error": "Player not found"}), 404
+        # If guest player (e.g. 9999), create/fetch guest record seamlessly
+        try:
+            from models.player import create_player, get_player_by_sr_code
+            guest = get_player_by_sr_code("GUEST-01")
+            if not guest:
+                pid, _ = create_player(
+                    first_name="Guest",
+                    last_name="Explorer",
+                    sr_code="GUEST-01",
+                    course="BSCS",
+                    department="CICS",
+                    registration_source="guest"
+                )
+                player = get_player_by_id(pid)
+            else:
+                player = guest
+                player_id = guest["id"]
+        except Exception:
+            return jsonify({"error": "Player not found"}), 404
 
     attempts_used = player["total_attempts_used"]
 
-    if attempts_used >= MAX_ATTEMPTS:
+    # Guest players have unlimited demo attempts
+    if player.get("sr_code") == "GUEST-01":
+        attempts_used = 0
+    elif attempts_used >= MAX_ATTEMPTS:
         return jsonify({
             "error": "Max attempts reached (3/3). No more attempts allowed.",
             "attempts_used": attempts_used,

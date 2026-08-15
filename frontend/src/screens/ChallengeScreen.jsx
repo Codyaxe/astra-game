@@ -20,11 +20,16 @@ import { startSession, submitAttempt } from '../services/api';
 
 export default function ChallengeScreen({
   player,
+  constellation,
   constellationData,
+  constellationIndex = 0,
+  totalConstellations = 1,
   attemptNumber = 1,
   onComplete,
   onDisqualified,
+  onForceExit,
 }) {
+  const activeConstellation = constellationData || constellation;
   const [sessionId, setSessionId] = useState(null);
   const [completedConnections, setCompletedConnections] = useState([]); // [{ from, to }]
   const [activeNode, setActiveNode] = useState(null);
@@ -56,8 +61,8 @@ export default function ChallengeScreen({
 
   // Model
   const constellationList = useMemo(() => {
-    return constellationData ? new ConstellationLinkedList(constellationData) : null;
-  }, [constellationData]);
+    return activeConstellation ? new ConstellationLinkedList(activeConstellation) : null;
+  }, [activeConstellation]);
 
   /**
    * Compute how accurately the player traced the segment from nodeA to nodeB.
@@ -297,7 +302,7 @@ export default function ChallengeScreen({
     startTimer();
 
     const pid = player?.id || 1;
-    const cid = constellationData?.id || 1;
+    const cid = activeConstellation?.id || 1;
 
     startSession(pid, cid)
       .then((res) => {
@@ -357,6 +362,28 @@ export default function ChallengeScreen({
         width={dimensions.w}
         height={dimensions.h}
       />
+
+      {/* Exit Button */}
+      <button
+        onClick={() => onForceExit?.()}
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: 20,
+          zIndex: 30,
+          background: 'rgba(15, 23, 42, 0.75)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          color: '#94a3b8',
+          padding: '6px 12px',
+          borderRadius: 10,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        ✕ Exit
+      </button>
 
       {/* HUD Bar */}
       <HUD
