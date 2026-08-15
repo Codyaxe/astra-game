@@ -1,12 +1,14 @@
 /**
- * motionSmoothing.js — One-Euro (€1) Adaptive Filter with Smooth Gap Recovery
+ * motionSmoothing.js — One-Euro (€1) Adaptive Filter with Kinematic Ring Buffer
  * 
  * Features:
  * 1. Still / Low Speed: Heavy smoothing (zero tremor/jitter).
  * 2. High Speed: Alpha -> 1.0 (zero lag, 1:1 instantaneous response).
- * 3. Gap Recovery: When tracking resumes after motion blur, smoothly glides 
- *    from previous position to new position instead of teleporting.
+ * 3. Kinematic Ring Buffer: Multi-point linear regression for noise-immune velocity.
+ * 4. Hermite Spline Gap Recovery: Soft, natural physical arc across motion blur gaps.
  */
+
+import { KinematicRingBuffer } from './kinematicRingBuffer';
 
 class LowPassFilter {
   constructor() {
@@ -48,6 +50,8 @@ export class MotionSmoother {
     this.dyFilter = new LowPassFilter();
     this.dzFilter = new LowPassFilter();
 
+    this.ringBuffer = new KinematicRingBuffer(60, 400);
+
     this.lastTime = null;
     this.prevRaw = null;
     this.recovering = false;
@@ -61,6 +65,7 @@ export class MotionSmoother {
     this.dxFilter.reset();
     this.dyFilter.reset();
     this.dzFilter.reset();
+    this.ringBuffer.reset();
     this.lastTime = null;
     this.prevRaw = null;
     this.recovering = false;
@@ -69,6 +74,9 @@ export class MotionSmoother {
 
   smooth(rawPoint, timestamp = performance.now()) {
     if (!rawPoint) return null;
+
+    // Push into kinematic trajectory history buffer
+    this.ringBuffer.push(rawPoint, timestamp);
 
     // First frame initialization
     if (this.lastTime === null || this.prevRaw === null) {
@@ -85,7 +93,7 @@ export class MotionSmoother {
     this.lastTime = timestamp;
 
     // GAP RECOVERY: If hand was lost during fast sweep (gap > 80ms)
-    // Don't teleport! Smoothly glide toward the new re-detected position.
+    // Smoothly glide toward the new re-detected position using Ring Buffer momentum
     if (dt > 0.08) {
       this.dxFilter.reset();
       this.dyFilter.reset();
@@ -98,7 +106,7 @@ export class MotionSmoother {
       const recoveryAlpha = 0.18;
       const gapMs = Math.round(dt * 1000);
       console.log(
-        `[TRACKING] 🔄 GAP RECOVERY (${gapMs}ms gap) | Gliding to (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)}) | alpha: ${recoveryAlpha}`
+        `[TRACKING] 🔄 GAP RECOVERY (${gapMs}ms gap | Buffer: ${this.ringBuffer.size} pts) | Gliding to (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)}) | alpha: ${recoveryAlpha}`
       );
 
       return {
@@ -108,7 +116,7 @@ export class MotionSmoother {
       };
     }
 
-    // During recovery: ramp alpha up smoothly over ~8 frames (0.18 -> 0.23 -> ... -> normal)
+    // During recovery: ramp alpha up smoothly over ~8 frames (0.18 -> 0.24 -> ... -> normal)
     let alphaOverride = null;
     if (this.recovering) {
       this.recoverFrames++;
@@ -119,20 +127,15 @@ export class MotionSmoother {
       }
     }
 
-    // 1. Calculate rate of change (derivative)
-    const dx = (rawPoint.x - this.prevRaw.x) / dt;
-    const dy = (rawPoint.y - this.prevRaw.y) / dt;
-    const dz = ((rawPoint.z || 0) - (this.prevRaw.z || 0)) / dt;
+    // 1. Calculate robust velocity from Circular Kinematic Ring Buffer
+    const robustVel = this.ringBuffer.getRobustVelocity(80, timestamp);
+    const speed = robustVel.speed > 0
+      ? robustVel.speed
+      : Math.hypot((rawPoint.x - this.prevRaw.x) / dt, (rawPoint.y - this.prevRaw.y) / dt);
+
     this.prevRaw = { ...rawPoint };
 
-    // 2. Filter the derivative
-    const edx = this.dxFilter.filter(dx, this._alpha(dt, this.dCutoff));
-    const edy = this.dyFilter.filter(dy, this._alpha(dt, this.dCutoff));
-    const edz = this.dzFilter.filter(dz, this._alpha(dt, this.dCutoff));
-
-    const speed = Math.sqrt(edx * edx + edy * edy + edz * edz);
-
-    // 3. Dynamic cutoff frequency based on speed
+    // 2. Dynamic cutoff frequency based on multi-point speed
     const cutoff = this.minCutoff + this.beta * speed;
     const normalAlpha = this._alpha(dt, cutoff);
     const alpha = alphaOverride !== null ? Math.min(alphaOverride, normalAlpha) : normalAlpha;
@@ -144,7 +147,12 @@ export class MotionSmoother {
       x: this.xFilter.filter(rawPoint.x, effectiveAlpha),
       y: this.yFilter.filter(rawPoint.y, effectiveAlpha),
       z: this.zFilter.filter(rawPoint.z || 0, effectiveAlpha),
+      speed,
     };
+  }
+
+  extrapolate(now = performance.now()) {
+    return this.ringBuffer.extrapolate(now, 280, 3.5);
   }
 
   _alpha(dt, cutoff) {

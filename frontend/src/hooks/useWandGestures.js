@@ -46,14 +46,11 @@ export function useWandGestures({
         console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
       }
 
-      const lostElapsed = now - lastValidTimeRef.current;
-      // Inertial Dead-Reckoning: glide cursor along momentum vector for up to 250ms during motion blur
-      if (lastValidPointerRef.current && lostElapsed < 250) {
-        const decay = Math.max(0, 1.0 - lostElapsed / 250);
-        const dt = lostElapsed / 1000;
-        const extraX = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.x + velocityRef.current.vx * dt * decay * 0.4));
-        const extraY = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.y + velocityRef.current.vy * dt * decay * 0.4));
-        setPointer({ x: extraX, y: extraY, z: lastValidPointerRef.current.z || 0 });
+      const lostElapsed = now - lastDetectedTimeRef.current;
+      // Trajectory History Buffer Kinematic Dead-Reckoning Extrapolation
+      const pred = smootherRef.current.extrapolate(now);
+      if (pred && lostElapsed < 280) {
+        setPointer({ x: pred.x, y: pred.y, z: pred.z });
       } else if (lostElapsed >= 600) {
         smootherRef.current.reset();
         setPointer(null);
