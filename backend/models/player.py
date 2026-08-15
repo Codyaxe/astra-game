@@ -164,20 +164,58 @@ def delete_player(player_id: int) -> bool:
 
 
 def find_player_by_ticket_or_sr(target: str) -> dict | None:
-    """Find player by QR ticket code, ticket_token, or SR code."""
+    """Find player by QR ticket code, BSU-TICKET payload, JSON, or SR code."""
+    import re, json
     t = target.strip()
-    # 1. Try exact QR ticket code
+
+    # 1. Check if raw JSON
+    try:
+        data = json.loads(t)
+        if isinstance(data, dict):
+            sr = data.get("srCode") or data.get("sr_code")
+            if sr:
+                p = get_player_by_sr_code(sr)
+                if p: return p
+            pid = data.get("id") or data.get("player_id")
+            if pid:
+                p = get_player_by_id(pid)
+                if p: return p
+    except Exception:
+        pass
+
+    # 2. Check if BSU-TICKET:ID:SR_CODE format
+    if t.startswith("BSU-TICKET:"):
+        parts = t.replace("BSU-TICKET:", "").split(":")
+        for part in parts:
+            p = get_player_by_ticket(part) or get_player_by_sr_code(part)
+            if p: return p
+            if part.isdigit():
+                p = get_player_by_id(int(part))
+                if p: return p
+
+    # 3. Direct QR ticket code
     rows = execute("SELECT * FROM players WHERE qr_ticket_code = %s", (t,))
     if rows:
         return rows[0]
-    # 2. Try SR Code
+
+    # 4. Direct SR Code
     rows = execute("SELECT * FROM players WHERE sr_code = %s", (t,))
     if rows:
         return rows[0]
-    # 3. Try partial SR Code without hyphens
-    clean_t = t.replace("-", "")
+
+    # 5. Extract SR code via regex pattern (e.g. 21-12345)
+    sr_match = re.search(r"\b\d{2}-\d{4,6}\b", t)
+    if sr_match:
+        rows = execute("SELECT * FROM players WHERE sr_code = %s", (sr_match.group(0),))
+        if rows:
+            return rows[0]
+
+    # 6. SR Code without hyphens
+    clean_t = re.sub(r"[^a-zA-Z0-9]", "", t)
     rows = execute("SELECT * FROM players WHERE REPLACE(sr_code, '-', '') = %s", (clean_t,))
     if rows:
         return rows[0]
+
     return None
+
 

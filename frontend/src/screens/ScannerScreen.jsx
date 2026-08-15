@@ -72,6 +72,7 @@ export default function ScannerScreen({ onBack, onStartGame }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(null);
+  const [manualInput, setManualInput] = useState("");
 
   useEffect(() => {
     return () => stopCamera();
@@ -96,39 +97,59 @@ export default function ScannerScreen({ onBack, onStartGame }) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
       requestAnimationFrame(tick);
     } catch (err) {
-      setError("Camera access denied. Please allow camera permissions and try again.");
+      setError("Camera access denied. Please check permissions or use manual entry below.");
       setState(STATE.IDLE);
     }
   }
 
-  function tick() {
+  async function tick() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
+    if (!video || !canvas || video.readyState < 2) {
       animFrameRef.current = requestAnimationFrame(tick);
       return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // 1. Try native hardware-accelerated BarcodeDetector (Chrome, Edge, Android)
+    if ('BarcodeDetector' in window) {
+      try {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const barcodes = await detector.detect(video);
+        if (barcodes.length > 0 && barcodes[0].rawValue) {
+          stopCamera();
+          setScannedData(barcodes[0].rawValue);
+          handleTicket(barcodes[0].rawValue);
+          return;
+        }
+      } catch (e) {
+        // fallback to jsQR below
+      }
+    }
+
+    // 2. Fallback to jsQR with attemptBoth inversion
+    canvas.width = Math.min(640, video.videoWidth || 640);
+    canvas.height = Math.min(480, video.videoHeight || 480);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: "dontInvert",
+      inversionAttempts: "attemptBoth",
     });
 
-    if (code) {
+    if (code && code.data) {
       stopCamera();
       setScannedData(code.data);
       handleTicket(code.data);
@@ -484,30 +505,95 @@ export default function ScannerScreen({ onBack, onStartGame }) {
         )}
 
         {state === STATE.IDLE && (
-          <button
-            className="scan-btn"
-            onClick={startCamera}
-            style={{
-              width: "100%",
-              height: 52,
-              borderRadius: 16,
-              border: `1px solid rgba(244,213,141,0.4)`,
-              background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
-              boxShadow: `0 8px 24px ${colors.accentGlow}`,
-              color: colors.text,
-              fontFamily: "inherit",
-              fontWeight: 800,
-              fontSize: 15,
-              letterSpacing: 2,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
-            📷 START SCANNING
-          </button>
+          <>
+            <button
+              className="scan-btn"
+              onClick={startCamera}
+              style={{
+                width: "100%",
+                height: 52,
+                borderRadius: 16,
+                border: `1px solid rgba(244,213,141,0.4)`,
+                background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
+                boxShadow: `0 8px 24px ${colors.accentGlow}`,
+                color: colors.text,
+                fontFamily: "inherit",
+                fontWeight: 800,
+                fontSize: 15,
+                letterSpacing: 2,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+              }}
+            >
+              📷 START SCANNING
+            </button>
+
+            {/* Manual SR-Code / Ticket Entry */}
+            <div
+              style={{
+                width: "100%",
+                background: "rgba(15,23,42,0.7)",
+                border: `1px solid ${colors.inputBorder}`,
+                borderRadius: 16,
+                padding: "14px 16px",
+                boxSizing: "border-box",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 700, color: colors.textDim, letterSpacing: 1 }}>
+                OR TYPE SR-CODE / TICKET MANUALLY:
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="text"
+                  placeholder="e.g. 21-12345"
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && manualInput.trim()) {
+                      handleTicket(manualInput.trim());
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    background: colors.inputBg,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: 10,
+                    padding: "8px 12px",
+                    color: colors.text,
+                    fontSize: 13,
+                    fontFamily: "monospace",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (manualInput.trim()) {
+                      handleTicket(manualInput.trim());
+                    }
+                  }}
+                  style={{
+                    background: colors.accent,
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "8px 16px",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  VERIFY
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {state === STATE.SCANNING && (
