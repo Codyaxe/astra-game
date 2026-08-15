@@ -1,21 +1,22 @@
 /**
- * motionSmoothing.js — Ultra-Responsive 1€ Filter with Diagnostic Telemetry Logging
+ * motionSmoothing.js — Pure One-Euro (€1) Adaptive Filter (Casiez et al., CHI 2012)
+ *
+ * Characteristics:
+ * - Low speed / Still: High filtering to eliminate sensor tremor and jitter.
+ * - High speed / Fast sweeps: Zero lag, alpha -> 1.0, 1:1 instant responsiveness.
  */
 
 class LowPassFilter {
   constructor(alpha = 1.0) {
     this.alpha = alpha;
     this.s = null;
-    this.lastRaw = null;
   }
 
   reset() {
     this.s = null;
-    this.lastRaw = null;
   }
 
   filter(value, alpha = this.alpha) {
-    this.lastRaw = value;
     if (this.s === null) {
       this.s = value;
       return value;
@@ -26,10 +27,10 @@ class LowPassFilter {
 }
 
 export class MotionSmoother {
-  constructor(minCutoff = 1.5, beta = 0.05, dCutoff = 1.5) {
-    this.minCutoff = minCutoff;
-    this.beta = beta;
-    this.dCutoff = dCutoff;
+  constructor(minCutoff = 1.0, beta = 0.05, dCutoff = 1.0) {
+    this.minCutoff = minCutoff; // Hz: Minimum cutoff frequency at zero speed
+    this.beta = beta;           // Velocity coefficient: responsiveness to speed
+    this.dCutoff = dCutoff;     // Hz: Cutoff frequency for derivative
 
     this.xFilter = new LowPassFilter();
     this.yFilter = new LowPassFilter();
@@ -41,7 +42,6 @@ export class MotionSmoother {
 
     this.lastTime = null;
     this.prevRaw = null;
-    this.lastLogTime = 0;
   }
 
   reset() {
@@ -69,10 +69,10 @@ export class MotionSmoother {
     }
 
     const dt = Math.max((timestamp - this.lastTime) / 1000.0, 0.001);
-    
-    // Stale Frame Protection: If > 80ms elapsed since last detection (hand was lost),
-    // cleanly re-anchor without calculating stale acceleration.
-    if (dt > 0.08) {
+    this.lastTime = timestamp;
+
+    // Reset filter state if tracking was interrupted (gap > 100ms)
+    if (dt > 0.1) {
       this.reset();
       this.lastTime = timestamp;
       this.prevRaw = { ...rawPoint };
@@ -83,65 +83,26 @@ export class MotionSmoother {
       };
     }
 
-    // Step Clamping Guard: Cap single-frame movement to maxStep (0.15 screen distance per frame)
-    // to physically eliminate cross-screen coordinate jumps when hand clips camera borders.
-    let targetX = rawPoint.x;
-    let targetY = rawPoint.y;
-    if (this.prevRaw) {
-      const maxStep = 0.15; // Max natural human hand delta in 16ms
-      const deltaX = rawPoint.x - this.prevRaw.x;
-      const deltaY = rawPoint.y - this.prevRaw.y;
-      const stepDist = Math.hypot(deltaX, deltaY);
-
-      if (stepDist > maxStep) {
-        const scale = maxStep / stepDist;
-        targetX = this.prevRaw.x + deltaX * scale;
-        targetY = this.prevRaw.y + deltaY * scale;
-      }
-    }
-
-    const fps = Math.round(1.0 / dt);
-    this.lastTime = timestamp;
-
-    // 1. Calculate instantaneous velocity derivative
-    const dx = (targetX - this.prevRaw.x) / dt;
-    const dy = (targetY - this.prevRaw.y) / dt;
+    // 1. Calculate rate of change (derivative)
+    const dx = (rawPoint.x - this.prevRaw.x) / dt;
+    const dy = (rawPoint.y - this.prevRaw.y) / dt;
     const dz = ((rawPoint.z || 0) - (this.prevRaw.z || 0)) / dt;
-    this.prevRaw = { x: targetX, y: targetY, z: rawPoint.z || 0 };
+    this.prevRaw = { ...rawPoint };
 
+    // 2. Filter the derivative
     const edx = this.dxFilter.filter(dx, this._alpha(dt, this.dCutoff));
     const edy = this.dyFilter.filter(dy, this._alpha(dt, this.dCutoff));
     const edz = this.dzFilter.filter(dz, this._alpha(dt, this.dCutoff));
 
     const speed = Math.sqrt(edx * edx + edy * edy + edz * edz);
 
-    // Diagnostic logging (every 300ms or when fast moving)
-    const now = performance.now();
-    if (speed > 0.8 || now - this.lastLogTime > 400) {
-      this.lastLogTime = now;
-      console.log(
-        `[TRACKING] 📊 FPS: ${fps} | Speed: ${speed.toFixed(2)} | ` +
-        (speed > 1.2 ? `⚡ FAST-BYPASS (0ms lag)` : `🎯 SMOOTHED (alpha=${this._alpha(dt, this.minCutoff + this.beta * speed).toFixed(3)})`) +
-        ` | Pos: (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)})`
-      );
-    }
-
-    // 2. High-speed fast-bypass: If moving fast, lock alpha to 1.0 for instant zero-latency tracking
-    if (speed > 1.2) {
-      return {
-        x: this.xFilter.filter(targetX, 1.0),
-        y: this.yFilter.filter(targetY, 1.0),
-        z: this.zFilter.filter(rawPoint.z || 0, 1.0),
-      };
-    }
-
-    // 3. Dynamic Cutoff Frequency (One-Euro formulation)
+    // 3. Dynamic cutoff frequency based on speed
     const cutoff = this.minCutoff + this.beta * speed;
     const alpha = this._alpha(dt, cutoff);
 
     return {
-      x: this.xFilter.filter(targetX, alpha),
-      y: this.yFilter.filter(targetY, alpha),
+      x: this.xFilter.filter(rawPoint.x, alpha),
+      y: this.yFilter.filter(rawPoint.y, alpha),
       z: this.zFilter.filter(rawPoint.z || 0, alpha),
     };
   }
