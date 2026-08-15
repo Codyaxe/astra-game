@@ -138,13 +138,22 @@ export default function ScannerScreen({ onBack, onStartGame }) {
       }
     }
 
-    // 2. Fallback to jsQR with attemptBoth inversion
-    canvas.width = Math.min(640, video.videoWidth || 640);
-    canvas.height = Math.min(480, video.videoHeight || 480);
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // 2. Fallback to jsQR with attemptBoth inversion on undistorted aspect ratio
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) {
+      animFrameRef.current = requestAnimationFrame(tick);
+      return;
+    }
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    if (canvas.width !== vw || canvas.height !== vh) {
+      canvas.width = vw;
+      canvas.height = vh;
+    }
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(video, 0, 0, vw, vh);
+
+    const imageData = ctx.getImageData(0, 0, vw, vh);
     const code = jsQR(imageData.data, imageData.width, imageData.height, {
       inversionAttempts: "attemptBoth",
     });
@@ -157,6 +166,33 @@ export default function ScannerScreen({ onBack, onStartGame }) {
     }
 
     animFrameRef.current = requestAnimationFrame(tick);
+  }
+
+  // Handle uploaded image file directly (e.g. Paint screenshot, photo)
+  function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, c.width, c.height);
+      const code = jsQR(imgData.data, imgData.width, imgData.height, {
+        inversionAttempts: "attemptBoth",
+      });
+
+      if (code && code.data) {
+        setScannedData(code.data);
+        handleTicket(code.data);
+      } else {
+        setError("Could not find a valid QR code in this image. Try another screenshot or type your SR-Code.");
+      }
+    };
+    img.src = URL.createObjectURL(file);
   }
 
   async function handleTicket(raw) {
@@ -241,22 +277,26 @@ export default function ScannerScreen({ onBack, onStartGame }) {
           position: "relative",
           zIndex: 2,
           width: "100%",
-          maxWidth: 440,
+          maxWidth: 600,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "center",
           padding: "16px 18px 0",
           boxSizing: "border-box",
+          minHeight: 48,
         }}
       >
         <button
           onClick={onBack}
           style={{
+            position: "absolute",
+            left: 18,
+            top: 16,
             background: "rgba(15,23,42,0.8)",
             border: `1px solid ${colors.inputBorder}`,
             color: colors.textDim,
             borderRadius: 12,
-            padding: "8px 16px",
+            padding: "8px 8px",
             fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
@@ -278,24 +318,29 @@ export default function ScannerScreen({ onBack, onStartGame }) {
 
         <div
           style={{
-            width: 60,
-            textAlign: "right",
+            position: "absolute",
+            right: 18,
+            top: 22,
             fontSize: 9,
             fontWeight: 700,
             color: colors.success,
             letterSpacing: 0.5,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
           }}
         >
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: colors.success, boxShadow: `0 0 8px ${colors.success}` }} />
           ONLINE
         </div>
       </div>
 
       {/* Title */}
-      <div style={{ position: "relative", zIndex: 2, textAlign: "center", margin: "12px 0 16px" }}>
+      <div style={{ position: "relative", zIndex: 2, textAlign: "center", margin: "14px 0 16px", width: "100%" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: colors.text, letterSpacing: 2 }}>
           SCAN GAME PASS
         </div>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 2 }}>
           <span style={{ color: colors.gold, fontSize: 12 }}>✦</span>
           <span style={{ color: colors.gold, fontWeight: 700, fontSize: 11, letterSpacing: 3 }}>
             QR TICKET
@@ -324,13 +369,12 @@ export default function ScannerScreen({ onBack, onStartGame }) {
             width: "100%",
             aspectRatio: "1 / 1",
             background: colors.cardBg,
-            border: `1px solid ${
-              state === STATE.RESULT
+            border: `1px solid ${state === STATE.RESULT
                 ? isAllowed
                   ? colors.success
                   : colors.danger
                 : "rgba(244, 213, 141, 0.3)"
-            }`,
+              }`,
             borderRadius: 24,
             overflow: "hidden",
             position: "relative",
@@ -433,7 +477,7 @@ export default function ScannerScreen({ onBack, onStartGame }) {
                   >
                     WELCOME, {result.player.first_name}!
                   </div>
-                  
+
                   <div
                     style={{
                       background: "rgba(15,23,42,0.85)",
@@ -591,6 +635,33 @@ export default function ScannerScreen({ onBack, onStartGame }) {
                 >
                   VERIFY
                 </button>
+              </div>
+
+              {/* Upload Screenshot / File */}
+              <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    color: colors.gold,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    background: "rgba(244,213,141,0.08)",
+                    border: `1px dashed rgba(244,213,141,0.3)`,
+                  }}
+                >
+                  📁 Upload / Drop QR Screenshot File
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: "none" }}
+                  />
+                </label>
               </div>
             </div>
           </>

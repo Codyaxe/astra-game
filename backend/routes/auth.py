@@ -225,6 +225,57 @@ def mobile_register():
     return jsonify(body), status
 
 
+@auth_bp.route("/ticket-qr/<int:player_id>", methods=["GET"])
+def ticket_qr(player_id):
+    """
+    Generate an authentic QR code image for a player ticket.
+    """
+    player = get_player_by_id(player_id)
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    qr_text = player["qr_ticket_code"]
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(qr_text)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
+@auth_bp.route("/qr-generate", methods=["GET"])
+def qr_generate():
+    """
+    Generate a dynamic QR code PNG for any arbitrary payload string.
+    """
+    data = request.args.get("data", "").strip()
+    if not data:
+        return jsonify({"error": "data query param is required"}), 400
+
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=2,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
+
 @auth_bp.route("/use-attempt", methods=["POST"])
 def use_attempt():
     """
