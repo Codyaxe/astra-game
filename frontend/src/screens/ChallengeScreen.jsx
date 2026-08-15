@@ -75,18 +75,20 @@ export default function ChallengeScreen({
     }
     const elapsed = Date.now() - startTimeRef.current;
     try {
-      await submitAttempt(sessionId, {
+      const res = await submitAttempt(sessionId, {
         time_elapsed_ms: elapsed,
         wrong_connections: wrongConnections,
         total_clicks: totalClicks,
         wand_travel_dist: wandTravelDistRef.current,
         recalibration_count: recalibrationCount,
-        completed_status: 3, // circle force exit
+        completed_status: 3,
       });
+
+      onForceExit?.(res);
     } catch (e) {
       console.error(e);
+      onForceExit?.();
     }
-    onForceExit?.();
   }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onForceExit]);
 
   // Shake: Recalibrate
@@ -103,18 +105,20 @@ export default function ChallengeScreen({
     }
     const elapsed = Date.now() - startTimeRef.current;
     try {
-      await submitAttempt(sessionId, {
+      const res = await submitAttempt(sessionId, {
         time_elapsed_ms: elapsed,
         wrong_connections: wrongConnections,
         total_clicks: totalClicks,
         wand_travel_dist: wandTravelDistRef.current,
         recalibration_count: recalibrationCount,
-        completed_status: 2, // Disqualified
+        completed_status: 2,
       });
+
+      onDisqualified?.(res);
     } catch (e) {
       console.error(e);
+      onDisqualified?.();
     }
-    onDisqualified?.();
   }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onDisqualified]);
 
   const timeLimit = constellationList?.timeLimitSec || 30;

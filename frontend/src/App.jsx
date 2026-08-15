@@ -53,25 +53,40 @@ export default function App() {
 
   const handleRegistered = useCallback((playerData, attemptsRemaining) => {
     setPlayer(playerData);
-    const currentAttempt = (3 - attemptsRemaining) + 1;
+    const currentAttempt = 3 - attemptsRemaining;
     setAttemptNumber(currentAttempt);
     setConstellationIndex(0);
     setScreen('challenge');
   }, []);
 
   const handleChallengeComplete = useCallback((result) => {
-    setLastAttemptResult(result);
-    // Next constellation in chain or finish attempt
-    if (constellationIndex + 1 < constellations.length) {
-      setConstellationIndex((idx) => idx + 1);
-    } else {
-      setScreen('leaderboard');
-    }
-  }, [constellationIndex, constellations.length]);
+  setLastAttemptResult(result);
 
-  const handleForceExitOrDisqualified = useCallback(() => {
+  // Update the local player state with the latest attempt information
+  if (result?.attempts_used !== undefined) {
+    setPlayer((prev) =>
+      prev
+        ? {
+            ...prev,
+            total_attempts_used: result.attempts_used,
+            best_score: result.best_score,
+          }
+        : prev
+    );
+  }
+
+  // Next constellation in chain or finish attempt
+  if (constellationIndex + 1 < constellations.length) {
+    setConstellationIndex((idx) => idx + 1);
+  } else {
     setScreen('leaderboard');
-  }, []);
+  }
+}, [constellationIndex, constellations.length]);
+
+  const handleForceExitOrDisqualified = useCallback((result) => {
+  setLastAttemptResult(result);
+  setScreen('leaderboard');
+}, []);
 
   const handleRetryNextAttempt = useCallback(() => {
     setAttemptNumber((prev) => prev + 1);

@@ -3,7 +3,11 @@ GameSession model — Handles attempts, telemetry recording, and leaderboard syn
 """
 
 from database.db import get_connection
-from models.player import increment_attempt_and_update_best_score
+from models.player import (
+    increment_attempt_and_update_best_score,
+    get_player_by_id,
+    MAX_ATTEMPTS,
+)
 
 
 def create_session(player_id: int, constellation_id: int, attempt_number: int = 1) -> int:
@@ -47,31 +51,81 @@ def get_session(session_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def finalize_attempt(session_id: int, final_score: float) -> dict:
+def finalize_attempt(session_id: int, final_score: float, completed_status: int = 1) -> dict:
     """
-    Finalize a session, increment the player's attempt count,
-    update their best score, and sync with the leaderboard.
+    Finalize a game session exactly once.
+
+    One game session = one player attempt.
+
+    completed_status:
+        1 = Completed
+        2 = Disqualified / timer expired
+        3 = Force exit
     """
     session = get_session(session_id)
+
     if not session:
         raise ValueError("Session not found")
 
-    player_id = session["player_id"]
-    attempt_result = increment_attempt_and_update_best_score(player_id, final_score)
+    # If this session was already finalized, do not consume
+    # another player attempt.
+    if session["completed_status"] in (1, 2, 3):
+        player = get_player_by_id(session["player_id"])
 
-    # Sync to leaderboard table
+        return {
+            "player_id": player["id"],
+            "attempts_used": player["total_attempts_used"],
+            "attempts_remaining": max(
+                0,
+                MAX_ATTEMPTS - player["total_attempts_used"]
+            ),
+            "best_score": player["best_score"],
+            "is_new_high_score": False,
+        }
+
+    player_id = session["player_id"]
+
+    # Save the actual result of this session.
+    update_session(
+        session_id,
+        completed_status=completed_status,
+        score=final_score,
+    )
+
+    # Consume exactly one attempt.
+    attempt_result = increment_attempt_and_update_best_score(
+        player_id,
+        final_score
+    )
+
+    # Sync player with leaderboard.
     conn = get_connection()
+
     conn.execute(
         """
-        INSERT INTO leaderboard (player_id, highest_score, attempts_used, updated_at)
+        INSERT INTO leaderboard (
+            player_id,
+            highest_score,
+            attempts_used,
+            updated_at
+        )
         VALUES (?, ?, ?, datetime('now'))
+
         ON CONFLICT(player_id) DO UPDATE SET
-            highest_score = MAX(leaderboard.highest_score, excluded.highest_score),
+            highest_score = MAX(
+                leaderboard.highest_score,
+                excluded.highest_score
+            ),
             attempts_used = excluded.attempts_used,
-            updated_at    = datetime('now')
+            updated_at = datetime('now')
         """,
-        (player_id, attempt_result["best_score"], attempt_result["attempts_used"]),
+        (
+            player_id,
+            attempt_result["best_score"],
+            attempt_result["attempts_used"],
+        ),
     )
+
     conn.commit()
     conn.close()
 
