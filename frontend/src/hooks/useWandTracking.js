@@ -25,7 +25,8 @@ export function useWandTracking(enabled = false) {
     ) {
       // Landmark 8 = INDEX_FINGER_TIP (or wand tip)
       const tip = results.multiHandLandmarks[0][8];
-      setPointer({ x: tip.x, y: tip.y });
+      // Convert camera-space X to screen-space X.
+      setPointer({ x: 1 - tip.x, y: tip.y });
     } else {
       setPointer(null);
     }
