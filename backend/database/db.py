@@ -2,30 +2,41 @@ import mysql.connector
 from mysql.connector import pooling
 from config import Config
 
-_pool = pooling.MySQLConnectionPool(
-    pool_name="constellation_pool",
-    pool_size=32,
-    host=Config.MYSQL_HOST,
-    port=Config.MYSQL_PORT,
-    user=Config.MYSQL_USER,
-    password=Config.MYSQL_PASSWORD,
-    database=Config.MYSQL_DATABASE,
-    autocommit=False,
-)
+_pool = None
 
+def _get_pool():
+    global _pool
+    if _pool is None:
+        try:
+            _pool = pooling.MySQLConnectionPool(
+                pool_name="constellation_pool",
+                pool_size=5,
+                host=Config.MYSQL_HOST,
+                port=Config.MYSQL_PORT,
+                user=Config.MYSQL_USER,
+                password=Config.MYSQL_PASSWORD,
+                database=Config.MYSQL_DATABASE,
+                autocommit=False,
+            )
+        except Exception:
+            _pool = False
+    return _pool
 
 def get_connection():
     """Get a pooled MySQL connection with fallback to direct connection."""
-    try:
-        return _pool.get_connection()
-    except Exception:
-        return mysql.connector.connect(
-            host=Config.MYSQL_HOST,
-            port=Config.MYSQL_PORT,
-            user=Config.MYSQL_USER,
-            password=Config.MYSQL_PASSWORD,
-            database=Config.MYSQL_DATABASE,
-        )
+    pool = _get_pool()
+    if pool:
+        try:
+            return pool.get_connection()
+        except Exception:
+            pass
+    return mysql.connector.connect(
+        host=Config.MYSQL_HOST,
+        port=Config.MYSQL_PORT,
+        user=Config.MYSQL_USER,
+        password=Config.MYSQL_PASSWORD,
+        database=Config.MYSQL_DATABASE,
+    )
 
 
 def get_cursor(conn, dictionary: bool = True):
