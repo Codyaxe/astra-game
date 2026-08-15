@@ -3,7 +3,7 @@ Constellation model — Linked-list struct parsing and traversal helpers.
 """
 
 import json
-from database.db import execute
+from database.db import execute, get_connection
 
 
 def get_all() -> list[dict]:
@@ -24,7 +24,7 @@ def validate_connection(constellation_id: int, from_node_id: int, to_node_id: in
     if not c:
         return False
 
-    nodes_map = {n["id"]: n for n in c["star_nodes"]}
+    nodes_map = {n["id"]: n for n in c.get("star_nodes", [])}
     current_node = nodes_map.get(from_node_id)
     if not current_node:
         return False
@@ -34,6 +34,10 @@ def validate_connection(constellation_id: int, from_node_id: int, to_node_id: in
 
 def _parse_row(row) -> dict:
     d = dict(row)
-    d["star_nodes"] = json.loads(d.pop("star_nodes_json", "[]"))
-    d["fake_nodes"] = json.loads(d.pop("fake_nodes_json", "[]"))
+    if "star_nodes_json" in d:
+        val = d.pop("star_nodes_json")
+        d["star_nodes"] = json.loads(val) if isinstance(val, str) else (val or [])
+    if "fake_nodes_json" in d:
+        val = d.pop("fake_nodes_json")
+        d["fake_nodes"] = json.loads(val) if isinstance(val, str) else (val or [])
     return d
