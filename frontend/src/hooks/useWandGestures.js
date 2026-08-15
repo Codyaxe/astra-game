@@ -159,6 +159,15 @@ export function useWandGestures({
       let isProcessing = false;
       let frameCallbackId = null;
 
+      const scheduleNextFrame = () => {
+        if (cancelled || !videoRef.current) return;
+        if ('requestVideoFrameCallback' in videoRef.current) {
+          frameCallbackId = videoRef.current.requestVideoFrameCallback(processVideoFrame);
+        } else {
+          frameCallbackId = requestAnimationFrame(processVideoFrame);
+        }
+      };
+
       const processVideoFrame = async () => {
         if (cancelled) return;
 
@@ -173,18 +182,10 @@ export function useWandGestures({
           }
         }
 
-        if (videoRef.current && 'requestVideoFrameCallback' in videoRef.current) {
-          frameCallbackId = videoRef.current.requestVideoFrameCallback(processVideoFrame);
-        } else {
-          frameCallbackId = requestAnimationFrame(processVideoFrame);
-        }
+        scheduleNextFrame();
       };
 
-      if (videoRef.current && 'requestVideoFrameCallback' in videoRef.current) {
-        frameCallbackId = videoRef.current.requestVideoFrameCallback(processVideoFrame);
-      } else {
-        frameCallbackId = requestAnimationFrame(processVideoFrame);
-      }
+      scheduleNextFrame();
 
       cameraRef.current = {
         stop: () => {

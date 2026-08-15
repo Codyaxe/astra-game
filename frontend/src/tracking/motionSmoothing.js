@@ -96,9 +96,9 @@ export class MotionSmoother {
       this.recoverFrames = 0;
 
       const recoveryAlpha = 0.18;
-      const fps = Math.round(1.0 / dt);
+      const gapMs = Math.round(dt * 1000);
       console.log(
-        `[TRACKING] 🔄 GAP RECOVERY | FPS: ${fps} | Gliding to (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)}) | alpha: ${recoveryAlpha}`
+        `[TRACKING] 🔄 GAP RECOVERY (${gapMs}ms gap) | Gliding to (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)}) | alpha: ${recoveryAlpha}`
       );
 
       return {
