@@ -67,36 +67,13 @@ export function useWandGestures({
       return;
     }
 
-    // Multi-Hand Proximity Anchoring: Pick the hand closest to the last active cursor position
-    let bestLandmarks = results.multiHandLandmarks[0];
-    if (results.multiHandLandmarks.length > 1 && lastValidPointerRef.current) {
-      let minDistance = Infinity;
-      for (const handLandmarks of results.multiHandLandmarks) {
-        const tipX = 1 - handLandmarks[8].x;
-        const tipY = handLandmarks[8].y;
-        const dist = Math.hypot(tipX - lastValidPointerRef.current.x, tipY - lastValidPointerRef.current.y);
-        if (dist < minDistance) {
-          minDistance = dist;
-          bestLandmarks = handLandmarks;
-        }
-      }
-    }
-
-    const detection = detectorRef.current.update(bestLandmarks);
+    const detection = detectorRef.current.update(results.multiHandLandmarks[0]);
     if (!detection) return;
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
     const rawX = 1 - point.x;
     const rawY = point.y;
     const rawZ = point.z;
-
-    // Teleportation Guard: If hand jumps across the screen (> 35% distance in < 50ms), ignore the other hand
-    if (lastValidPointerRef.current && (now - lastValidTimeRef.current) < 50) {
-      const jumpDist = Math.hypot(rawX - lastValidPointerRef.current.x, rawY - lastValidPointerRef.current.y);
-      if (jumpDist > 0.35) {
-        return; // Ignore other hand switching
-      }
-    }
 
     // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
     const smoothedPoint = smootherRef.current.smooth({
