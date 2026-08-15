@@ -47,6 +47,16 @@ export default function ChallengeScreen({
     return constellationData ? new ConstellationLinkedList(constellationData) : null;
   }, [constellationData]);
 
+  const starNodes = useMemo(
+    () => constellationList?.getAllStarNodes() || [],
+    [constellationList]
+  );
+
+  const fakeNodes = useMemo(
+    () => constellationList?.getAllFakeNodes() || [],
+    [constellationList]
+  );
+
   // Initial head node setup
   useEffect(() => {
     if (constellationList) {
@@ -223,8 +233,8 @@ export default function ChallengeScreen({
 
       {/* Main Interactive Canvas */}
       <ConstellationCanvas
-        starNodes={constellationList?.getAllStarNodes() || []}
-        fakeNodes={constellationList?.getAllFakeNodes() || []}
+        starNodes={starNodes}
+        fakeNodes={fakeNodes}
         completedConnections={completedConnections}
         activeNode={activeNode}
         wandPointer={pointer}

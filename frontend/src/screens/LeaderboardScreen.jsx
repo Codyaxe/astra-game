@@ -6,16 +6,29 @@
 import { useEffect, useState } from 'react';
 import { getLeaderboard, getTicketDownloadUrl } from '../services/api';
 
-export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, onReturnToTitle }) {
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function LeaderboardScreen({
+  player,
+  lastAttemptResult,
+  onRetry,
+  onReturnToTitle,
+  previewMode = false,
+  previewLeaderboard = [],
+}) {
+  const [leaderboard, setLeaderboard] = useState(previewMode ? previewLeaderboard : []);
+  const [loading, setLoading] = useState(!previewMode);
 
   useEffect(() => {
+    if (previewMode) {
+      setLeaderboard(previewLeaderboard);
+      setLoading(false);
+      return;
+    }
+
     getLeaderboard(10)
       .then((res) => setLeaderboard(res.leaderboard || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [previewMode, previewLeaderboard]);
 
   const attemptsUsed = lastAttemptResult?.attempts_used || player?.total_attempts_used || 1;
   const attemptsRemaining = Math.max(0, 3 - attemptsUsed);
