@@ -71,7 +71,7 @@ export class MotionSmoother {
     const dt = Math.max((timestamp - this.lastTime) / 1000.0, 0.001);
     
     // Stale Frame Protection: If > 80ms elapsed since last detection (hand was lost),
-    // do NOT calculate velocity against stale data. Cleanly re-anchor at current position.
+    // cleanly re-anchor without calculating stale acceleration.
     if (dt > 0.08) {
       this.reset();
       this.lastTime = timestamp;
@@ -83,14 +83,31 @@ export class MotionSmoother {
       };
     }
 
+    // Step Clamping Guard: Cap single-frame movement to maxStep (0.15 screen distance per frame)
+    // to physically eliminate cross-screen coordinate jumps when hand clips camera borders.
+    let targetX = rawPoint.x;
+    let targetY = rawPoint.y;
+    if (this.prevRaw) {
+      const maxStep = 0.15; // Max natural human hand delta in 16ms
+      const deltaX = rawPoint.x - this.prevRaw.x;
+      const deltaY = rawPoint.y - this.prevRaw.y;
+      const stepDist = Math.hypot(deltaX, deltaY);
+
+      if (stepDist > maxStep) {
+        const scale = maxStep / stepDist;
+        targetX = this.prevRaw.x + deltaX * scale;
+        targetY = this.prevRaw.y + deltaY * scale;
+      }
+    }
+
     const fps = Math.round(1.0 / dt);
     this.lastTime = timestamp;
 
     // 1. Calculate instantaneous velocity derivative
-    const dx = (rawPoint.x - this.prevRaw.x) / dt;
-    const dy = (rawPoint.y - this.prevRaw.y) / dt;
+    const dx = (targetX - this.prevRaw.x) / dt;
+    const dy = (targetY - this.prevRaw.y) / dt;
     const dz = ((rawPoint.z || 0) - (this.prevRaw.z || 0)) / dt;
-    this.prevRaw = { ...rawPoint };
+    this.prevRaw = { x: targetX, y: targetY, z: rawPoint.z || 0 };
 
     const edx = this.dxFilter.filter(dx, this._alpha(dt, this.dCutoff));
     const edy = this.dyFilter.filter(dy, this._alpha(dt, this.dCutoff));
@@ -112,8 +129,8 @@ export class MotionSmoother {
     // 2. High-speed fast-bypass: If moving fast, lock alpha to 1.0 for instant zero-latency tracking
     if (speed > 1.2) {
       return {
-        x: this.xFilter.filter(rawPoint.x, 1.0),
-        y: this.yFilter.filter(rawPoint.y, 1.0),
+        x: this.xFilter.filter(targetX, 1.0),
+        y: this.yFilter.filter(targetY, 1.0),
         z: this.zFilter.filter(rawPoint.z || 0, 1.0),
       };
     }
@@ -123,8 +140,8 @@ export class MotionSmoother {
     const alpha = this._alpha(dt, cutoff);
 
     return {
-      x: this.xFilter.filter(rawPoint.x, alpha),
-      y: this.yFilter.filter(rawPoint.y, alpha),
+      x: this.xFilter.filter(targetX, alpha),
+      y: this.yFilter.filter(targetY, alpha),
       z: this.zFilter.filter(rawPoint.z || 0, alpha),
     };
   }
