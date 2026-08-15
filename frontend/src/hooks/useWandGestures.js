@@ -44,16 +44,25 @@ export function useWandGestures({
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
       const lostElapsed = now - lastValidTimeRef.current;
 
-      // Hold stable pointer for up to 200ms during brief motion blur, then hide cleanly
-      if (lastValidPointerRef.current && lostElapsed < 200) {
+      // Inertial Dead-Reckoning Extrapolation: Coast cursor along current velocity vector for up to 250ms
+      if (lastValidPointerRef.current && lostElapsed < 250) {
+        const dt = Math.min(lostElapsed / 1000, 0.033);
+        const friction = Math.max(0, 1.0 - lostElapsed / 250); // smooth decay
+        const extrapolatedX = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.x + velocityRef.current.vx * dt * friction));
+        const extrapolatedY = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.y + velocityRef.current.vy * dt * friction));
+
         setPointer({
-          x: lastValidPointerRef.current.x,
-          y: lastValidPointerRef.current.y,
+          x: extrapolatedX,
+          y: extrapolatedY,
           z: lastValidPointerRef.current.z,
         });
-      } else if (lostElapsed >= 200) {
+      } else if (lostElapsed >= 250) {
         smootherRef.current.reset();
         setPointer(null);
+        if (now - lastLostLogRef.current > 800) {
+          lastLostLogRef.current = now;
+          console.warn('[TRACKING] ⚠️ Hand lost (out of frame or resting)');
+        }
       }
       return;
     }
@@ -63,12 +72,23 @@ export function useWandGestures({
     if (!detection) return;
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
+    const rawX = 1 - point.x;
+    const rawY = point.y;
+    const rawZ = point.z;
 
-    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter (mirror X for natural mirror movement)
+    // Teleportation Guard: If position jumps > 40% of screen in < 30ms, ignore the glitch frame
+    if (lastValidPointerRef.current && (now - lastValidTimeRef.current) < 40) {
+      const jumpDist = Math.hypot(rawX - lastValidPointerRef.current.x, rawY - lastValidPointerRef.current.y);
+      if (jumpDist > 0.40) {
+        return; // Reject glitch jump
+      }
+    }
+
+    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
     const smoothedPoint = smootherRef.current.smooth({
-      x: 1 - point.x,
-      y: point.y,
-      z: point.z,
+      x: rawX,
+      y: rawY,
+      z: rawZ,
     }, now);
 
     // Compute velocity vector for dead-reckoning extrapolation
@@ -134,8 +154,8 @@ export function useWandGestures({
       hands.setOptions({
         maxNumHands: 1,
         modelComplexity: 0, // 0 = Lite (ultra-fast inference, prevents frame drops during fast sweeps)
-        minDetectionConfidence: 0.15, // Ultra-low threshold catches hands even through heavy motion blur
-        minTrackingConfidence: 0.15, // Retains tracking through fast sweeps
+        minDetectionConfidence: 0.6, // High confidence eliminates background shadow jumping
+        minTrackingConfidence: 0.5,  // Solid tracking
       });
 
       hands.onResults(onResults);
