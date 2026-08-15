@@ -67,8 +67,22 @@ export function useWandGestures({
       return;
     }
 
-    const landmarks = results.multiHandLandmarks[0];
-    const detection = detectorRef.current.update(landmarks);
+    // Multi-Hand Proximity Anchoring: Pick the hand closest to the last active cursor position
+    let bestLandmarks = results.multiHandLandmarks[0];
+    if (results.multiHandLandmarks.length > 1 && lastValidPointerRef.current) {
+      let minDistance = Infinity;
+      for (const handLandmarks of results.multiHandLandmarks) {
+        const tipX = 1 - handLandmarks[8].x;
+        const tipY = handLandmarks[8].y;
+        const dist = Math.hypot(tipX - lastValidPointerRef.current.x, tipY - lastValidPointerRef.current.y);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestLandmarks = handLandmarks;
+        }
+      }
+    }
+
+    const detection = detectorRef.current.update(bestLandmarks);
     if (!detection) return;
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
@@ -76,11 +90,11 @@ export function useWandGestures({
     const rawY = point.y;
     const rawZ = point.z;
 
-    // Teleportation Guard: If position jumps > 40% of screen in < 30ms, ignore the glitch frame
-    if (lastValidPointerRef.current && (now - lastValidTimeRef.current) < 40) {
+    // Teleportation Guard: If hand jumps across the screen (> 35% distance in < 50ms), ignore the other hand
+    if (lastValidPointerRef.current && (now - lastValidTimeRef.current) < 50) {
       const jumpDist = Math.hypot(rawX - lastValidPointerRef.current.x, rawY - lastValidPointerRef.current.y);
-      if (jumpDist > 0.40) {
-        return; // Reject glitch jump
+      if (jumpDist > 0.35) {
+        return; // Ignore other hand switching
       }
     }
 
@@ -90,16 +104,6 @@ export function useWandGestures({
       y: rawY,
       z: rawZ,
     }, now);
-
-    // Compute velocity vector for dead-reckoning extrapolation
-    if (lastValidPointerRef.current && lastValidTimeRef.current > 0) {
-      const dt = Math.max((now - lastValidTimeRef.current) / 1000, 0.001);
-      velocityRef.current = {
-        vx: (smoothedPoint.x - lastValidPointerRef.current.x) / dt,
-        vy: (smoothedPoint.y - lastValidPointerRef.current.y) / dt,
-        vz: ((smoothedPoint.z || 0) - (lastValidPointerRef.current.z || 0)) / dt,
-      };
-    }
 
     lastValidPointerRef.current = smoothedPoint;
     lastValidTimeRef.current = now;
@@ -152,7 +156,7 @@ export function useWandGestures({
       });
 
       hands.setOptions({
-        maxNumHands: 1,
+        maxNumHands: 2, // Track both hands simultaneously so proximity anchor locks onto active playing hand
         modelComplexity: 0, // 0 = Lite (ultra-fast inference, prevents frame drops during fast sweeps)
         minDetectionConfidence: 0.6, // High confidence eliminates background shadow jumping
         minTrackingConfidence: 0.5,  // Solid tracking
