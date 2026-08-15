@@ -36,6 +36,7 @@ export function useWandGestures({
     const now = performance.now();
 
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
       smootherRef.current.reset();
       setPointer(null);
       return;

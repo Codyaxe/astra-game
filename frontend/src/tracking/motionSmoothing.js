@@ -100,6 +100,12 @@ export class MotionSmoother {
     const cutoff = this.minCutoff + this.beta * speed;
     const alpha = this._alpha(dt, cutoff);
 
+    // Diagnostic Telemetry Log
+    const fps = Math.round(1.0 / dt);
+    console.log(
+      `[TRACKING] 📊 FPS: ${fps} | Speed: ${speed.toFixed(2)} | alpha: ${alpha.toFixed(3)} | Pos: (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)})`
+    );
+
     return {
       x: this.xFilter.filter(rawPoint.x, alpha),
       y: this.yFilter.filter(rawPoint.y, alpha),
