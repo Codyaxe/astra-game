@@ -1,94 +1,211 @@
 """
-GameSession model — Handles attempts, telemetry recording, and leaderboard sync.
+Game Session model — Handles player game-session records.
+
+Database:
+    MySQL / mysql.connector
+
+Table:
+    game_session
+
+Schema:
+    game_session_id  PK
+    user_id          FK -> players.id
+    attempt_number
+    score
+    total_time
+    mistakes
+    distance
 """
 
 from database.db import get_connection
-from models.player import increment_attempt_and_update_best_score
 
 
-def create_session(player_id: int, constellation_id: int, attempt_number: int = 1) -> int:
-    conn = get_connection()
-    cursor = conn.execute(
-        """
-        INSERT INTO game_sessions (player_id, constellation_id, attempt_number)
-        VALUES (?, ?, ?)
-        """,
-        (player_id, constellation_id, attempt_number),
-    )
-    conn.commit()
-    session_id = cursor.lastrowid
-    conn.close()
-    return session_id
-
-
-def update_session(session_id: int, **kwargs) -> None:
-    allowed = {
-        "score", "time_elapsed_ms", "wrong_connections",
-        "total_clicks", "wand_travel_dist", "recalibration_count",
-        "completed_status",
-    }
-    fields = {k: v for k, v in kwargs.items() if k in allowed}
-    if not fields:
-        return
-
-    set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values = list(fields.values()) + [session_id]
-
-    conn = get_connection()
-    conn.execute(f"UPDATE game_sessions SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    conn.close()
-
-
-def get_session(session_id: int) -> dict | None:
-    conn = get_connection()
-    row = conn.execute("SELECT * FROM game_sessions WHERE id = ?", (session_id,)).fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-def finalize_attempt(session_id: int, final_score: float) -> dict:
+def create_game_session(
+    user_id: int,
+    attempt_number: int,
+    score: float,
+    total_time: int,
+    mistakes: int,
+    distance: float,
+) -> int:
     """
-    Finalize a session, increment the player's attempt count,
-    update their best score, and sync with the leaderboard.
+    Create a game-session record.
+
+    Returns:
+        The ID of the newly created game session.
     """
-    session = get_session(session_id)
-    if not session:
-        raise ValueError("Session not found")
-
-    player_id = session["player_id"]
-    attempt_result = increment_attempt_and_update_best_score(player_id, final_score)
-
-    # Sync to leaderboard table
     conn = get_connection()
-    conn.execute(
-        """
-        INSERT INTO leaderboard (player_id, highest_score, attempts_used, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
-        ON CONFLICT(player_id) DO UPDATE SET
-            highest_score = MAX(leaderboard.highest_score, excluded.highest_score),
-            attempts_used = excluded.attempts_used,
-            updated_at    = datetime('now')
-        """,
-        (player_id, attempt_result["best_score"], attempt_result["attempts_used"]),
-    )
-    conn.commit()
-    conn.close()
+    cursor = conn.cursor()
 
-    return attempt_result
+    try:
+        cursor.execute(
+            """
+            INSERT INTO game_session (
+                user_id,
+                attempt_number,
+                score,
+                total_time,
+                mistakes,
+                distance
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                user_id,
+                attempt_number,
+                score,
+                total_time,
+                mistakes,
+                distance,
+            ),
+        )
+
+        conn.commit()
+        return cursor.lastrowid
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_game_session(game_session_id: int) -> dict | None:
+    """
+    Retrieve a game session by its ID.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute(
+            """
+            SELECT *
+            FROM game_session
+            WHERE game_session_id = %s
+            """,
+            (game_session_id,),
+        )
+
+        row = cursor.fetchone()
+        return row
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def get_game_sessions_by_user(user_id: int) -> list[dict]:
+    """
+    Retrieve all game sessions belonging to a player.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute(
+            """
+            SELECT *
+            FROM game_session
+            WHERE user_id = %s
+            ORDER BY game_session_id DESC
+            """,
+            (user_id,),
+        )
+
+        rows = cursor.fetchall()
+        return rows
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_leaderboard(limit: int = 10) -> list[dict]:
+    """
+    Retrieve the highest-scoring game sessions.
+
+    Each game session represents one attempt.
+    Players may therefore appear more than once if they have
+    multiple high-scoring attempts.
+    """
     conn = get_connection()
-    rows = conn.execute(
-        """
-        SELECT l.*, p.first_name, p.last_name, p.sr_code, p.course
-        FROM leaderboard l
-        JOIN players p ON p.id = l.player_id
-        ORDER BY l.highest_score DESC
-        LIMIT ?
-        """,
-        (limit,),
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute(
+            """
+            SELECT
+                gs.game_session_id,
+                gs.user_id,
+                gs.attempt_number,
+                gs.score,
+                gs.total_time,
+                gs.mistakes,
+                gs.distance,
+                p.first_name,
+                p.last_name,
+                p.sr_code,
+                p.course
+            FROM game_session gs
+            JOIN players p
+                ON p.id = gs.user_id
+            ORDER BY gs.score DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+
+        rows = cursor.fetchall()
+        return rows
+
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_leaderboard(limit: int = 10) -> list[dict]:
+    """
+    Return players ranked by their best game-session score.
+
+    Each player appears only once. The attempt number returned
+    is the attempt on which they achieved their best score.
+    """
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute(
+            """
+            SELECT
+                gs.game_session_id,
+                gs.user_id,
+                p.first_name,
+                p.last_name,
+                p.sr_code,
+                p.course,
+                gs.score,
+                gs.attempt_number
+            FROM game_session gs
+            JOIN players p
+                ON p.id = gs.user_id
+            INNER JOIN (
+                SELECT
+                    user_id,
+                    MAX(score) AS best_score
+                FROM game_session
+                GROUP BY user_id
+            ) best
+                ON best.user_id = gs.user_id
+                AND best.best_score = gs.score
+            ORDER BY gs.score DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+
+        rows = cursor.fetchall()
+
+        return rows
+
+    finally:
+        cursor.close()
+        conn.close()
