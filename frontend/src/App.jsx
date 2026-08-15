@@ -9,7 +9,6 @@ import { getConstellations } from './services/api';
 import { preloadAll } from './utils/audio';
 import { ASSETS } from './data/assets';
 import { DEFAULT_CONSTELLATIONS } from './data/defaultConstellations';
-import { prewarmMediaPipe } from './services/mediaPipeService';
 
 import TitleScreen from './screens/TitleScreen';
 import MenuScreen from './screens/MenuScreen';
@@ -31,18 +30,20 @@ export default function App() {
   const [constellations, setConstellations] = useState(DEFAULT_CONSTELLATIONS);
   const [constellationIndex, setConstellationIndex] = useState(0);
 
-  // Preload SFX + Pre-warm MediaPipe in background on boot
+  // Preload SFX
   useEffect(() => {
     preloadAll(ASSETS.sfx);
-    prewarmMediaPipe();
   }, []);
 
-  // Async background sync with backend (if backend has newer data)
+  // Async background sync with backend (filter out empty placeholder constellations)
   useEffect(() => {
     getConstellations()
       .then((res) => {
-        if (res.constellations && res.constellations.length > 0) {
-          setConstellations(res.constellations);
+        const valid = (res.constellations || []).filter(
+          (c) => Array.isArray(c.star_nodes) && c.star_nodes.length >= 2
+        );
+        if (valid.length > 0) {
+          setConstellations(valid);
         }
       })
       .catch(() => {});
@@ -141,6 +142,7 @@ export default function App() {
       }
       return (
         <ChallengeScreen
+          key={`${player?.id || 'guest'}-${currentConstellation.id || constellationIndex}-${attemptNumber}`}
           player={player}
           constellationData={currentConstellation}
           attemptNumber={attemptNumber}
