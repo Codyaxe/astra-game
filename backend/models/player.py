@@ -142,3 +142,42 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
         "best_score": best_avg,
         "is_new_high_score": best_avg > current_best,
     }
+
+
+def get_all_players() -> list[dict]:
+    """Return all registered players ordered by creation date descending."""
+    return execute("SELECT * FROM players ORDER BY created_at DESC")
+
+
+def reset_player_attempts(player_id: int) -> bool:
+    """Reset total attempts used for a player to 0."""
+    execute("UPDATE players SET total_attempts_used = 0 WHERE id = %s", (player_id,), commit=True)
+    return True
+
+
+def delete_player(player_id: int) -> bool:
+    """Delete player record and associated sessions."""
+    execute("DELETE FROM session_mistakes WHERE session_id IN (SELECT id FROM game_sessions WHERE player_id = %s)", (player_id,), commit=True)
+    execute("DELETE FROM game_sessions WHERE player_id = %s", (player_id,), commit=True)
+    execute("DELETE FROM players WHERE id = %s", (player_id,), commit=True)
+    return True
+
+
+def find_player_by_ticket_or_sr(target: str) -> dict | None:
+    """Find player by QR ticket code, ticket_token, or SR code."""
+    t = target.strip()
+    # 1. Try exact QR ticket code
+    rows = execute("SELECT * FROM players WHERE qr_ticket_code = %s", (t,))
+    if rows:
+        return rows[0]
+    # 2. Try SR Code
+    rows = execute("SELECT * FROM players WHERE sr_code = %s", (t,))
+    if rows:
+        return rows[0]
+    # 3. Try partial SR Code without hyphens
+    clean_t = t.replace("-", "")
+    rows = execute("SELECT * FROM players WHERE REPLACE(sr_code, '-', '') = %s", (clean_t,))
+    if rows:
+        return rows[0]
+    return None
+

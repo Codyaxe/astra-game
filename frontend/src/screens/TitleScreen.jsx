@@ -1,16 +1,18 @@
 /**
- * TitleScreen.jsx — Idle / attract screen.
- *
- * Animated star-field + game logo. 
- * The game only starts when QR ticket 2 is scanned and the player
- * is redirected here with ?autostart=true. No tap/play interaction.
+ * TitleScreen.jsx — Master Astra Kiosk & Game Attract Hub
  */
 
 import { useEffect, useRef } from 'react';
 
-const STAR_COUNT = 220;
+const STAR_COUNT = 180;
 
-export default function TitleScreen() {
+export default function TitleScreen({
+  onOpenScanner,
+  onOpenRegister,
+  onOpenLeaderboard,
+  onOpenDashboard,
+  onQuickPlay,
+}) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -59,13 +61,131 @@ export default function TitleScreen() {
   }, []);
 
   return (
-    <div className="screen screen--title">
-      <canvas ref={canvasRef} className="title-canvas" />
-      <div className="title-content">
-        <h1 className="title-logo">Constellation Tracer</h1>
-        <p className="title-cta">Scan your ticket to play</p>
-        <p className="title-hint">Present your QR ticket at the scanning station</p>
+    <div className="screen screen--title" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <canvas ref={canvasRef} className="title-canvas" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
+      
+      {/* Top Bar for Admin & Leaderboard */}
+      <div style={{ position: 'absolute', top: 20, right: 24, zIndex: 10, display: 'flex', gap: 12 }}>
+        <button
+          onClick={onOpenLeaderboard}
+          style={{
+            background: 'rgba(15, 23, 42, 0.8)',
+            border: '1px solid rgba(244, 213, 141, 0.4)',
+            color: '#f4d58d',
+            padding: '8px 16px',
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          🏆 Leaderboard
+        </button>
+        <button
+          onClick={onOpenDashboard}
+          style={{
+            background: 'rgba(15, 23, 42, 0.8)',
+            border: '1px solid rgba(99, 102, 241, 0.4)',
+            color: '#818cf8',
+            padding: '8px 16px',
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          ⚙️ Admin
+        </button>
+      </div>
+
+      <div className="title-content" style={{ position: 'relative', zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: '#f4d58d', letterSpacing: 4, textTransform: 'uppercase' }}>
+          ✦ Interactive Starlight Installation ✦
+        </div>
+        <h1 className="title-logo" style={{ fontSize: 'clamp(2.4rem, 6vw, 4.5rem)', fontWeight: 900, background: 'linear-gradient(135deg, #fff 0%, #f4d58d 60%, #e0a96d 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: 2 }}>
+          ASTRA
+        </h1>
+        <p style={{ color: '#94a3b8', fontSize: 16, margin: 0, letterSpacing: 1 }}>
+          Constellation Tracing & Gesture Challenge
+        </p>
+
+        {/* Primary Action Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24, width: '100%', maxWidth: 360, padding: '0 20px', boxSizing: 'border-box' }}>
+          <button
+            onClick={onOpenScanner}
+            style={{
+              width: '100%',
+              padding: '16px 20px',
+              borderRadius: 16,
+              border: '1px solid rgba(244, 213, 141, 0.5)',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+              color: '#ffffff',
+              fontSize: 16,
+              fontWeight: 800,
+              letterSpacing: 1.5,
+              cursor: 'pointer',
+              boxShadow: '0 10px 25px rgba(79, 70, 229, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              transition: 'transform 0.1s',
+            }}
+          >
+            📷 SCAN QR TICKET TO PLAY
+          </button>
+
+          <button
+            onClick={onOpenRegister}
+            style={{
+              width: '100%',
+              padding: '14px 20px',
+              borderRadius: 16,
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              background: 'rgba(15, 23, 42, 0.85)',
+              color: '#f8fafc',
+              fontSize: 14,
+              fontWeight: 700,
+              letterSpacing: 1,
+              cursor: 'pointer',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            📝 REGISTER / SCAN ID CARD
+          </button>
+
+          <button
+            onClick={onQuickPlay}
+            style={{
+              width: '100%',
+              padding: '10px 16px',
+              borderRadius: 12,
+              border: '1px dashed rgba(244, 213, 141, 0.3)',
+              background: 'transparent',
+              color: '#f4d58d',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              cursor: 'pointer',
+              marginTop: 4,
+            }}
+          >
+            ⚡ Quick Play (Guest Demo)
+          </button>
+        </div>
       </div>
     </div>
   );
-}
+}

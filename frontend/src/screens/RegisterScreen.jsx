@@ -1,0 +1,1633 @@
+import { useState, useRef, useMemo, useLayoutEffect, useEffect } from "react";
+import {
+  Camera,
+  QrCode,
+  ChevronDown,
+  Sparkle,
+  User,
+  CreditCard,
+  GraduationCap,
+  Layers,
+  LayoutGrid,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Ticket,
+  Gamepad2,
+  RefreshCw,
+  Check,
+  Database,
+} from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// THEME TOKENS & STYLES (Matching Mockup Image)
+// ---------------------------------------------------------------------------
+const colors = {
+  bg: "#030712",
+  cardBg: "rgba(11, 15, 28, 0.75)",
+  inputBg: "rgba(15, 23, 42, 0.65)",
+  inputBorder: "rgba(255, 255, 255, 0.08)",
+  accent: "#6366f1",
+  accentGlow: "rgba(99, 102, 241, 0.35)",
+  gold: "#f4d58d",
+  goldDark: "#d97706",
+  star: "#fef08a",
+  text: "#f8fafc",
+  textDim: "#64748b",
+  iconPurple: "#818cf8",
+  success: "#4ade80",
+  danger: "#f87171",
+  cyan: "#38bdf8",
+};
+
+function Starfield() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 65 }).map(() => ({
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        size: Math.random() * 2 + 1,
+        opacity: Math.random() * 0.6 + 0.3,
+        delay: Math.random() * 3,
+      })),
+    []
+  );
+  return (
+    <div style={styles.starfield} aria-hidden="true">
+      {stars.map((s, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            top: `${s.top}%`,
+            left: `${s.left}%`,
+            width: s.size,
+            height: s.size,
+            borderRadius: "50%",
+            background: colors.star,
+            opacity: s.opacity,
+            animation: `twinkle 3s ease-in-out ${s.delay}s infinite`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
+const GAME_URL = import.meta.env.VITE_GAME_URL || `${window.location.protocol}//${window.location.hostname}:5173`;
+
+export default function RegisterForm({ onOpenScanner = () => { }, onOpenDashboard = () => { } }) {
+  const [photo, setPhoto] = useState(null);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    mi: "",
+    srCode: "",
+    dept: "CICS",
+    course: "",
+    yearLevel: "",
+    section: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
+  const [scanMessageType, setScanMessageType] = useState("info");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  // Digital Game Ticket (QR #2) & Game Station state
+  const [ticketData, setTicketData] = useState(null);
+  const [showGameTester, setShowGameTester] = useState(false);
+  const [gameScanInput, setGameScanInput] = useState("");
+  const [gameScanResult, setGameScanResult] = useState(null);
+  const [gameScanLoading, setGameScanLoading] = useState(false);
+
+  const fileInputRef = useRef(null);
+  const cardRef = useRef(null);
+  const [scale, setScale] = useState(1);
+
+  // QR #1: Static Booth QR code linking to local frontend
+  const currentRegistrationUrl = import.meta.env.VITE_REGISTRATION_URL || window.location.href;
+  const boothQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(
+    currentRegistrationUrl
+  )}`;
+
+  // QR #2: Digital Game Pass Ticket QR payload — uses UUID ticket_token for unique 1:1 identification
+  const ticketQrPayload = ticketData?.ticket_token
+    ? `BSU-TICKET:${ticketData.ticket_token}`
+    : ticketData
+      ? `BSU-TICKET:${ticketData.id}:${ticketData.sr_code}`
+      : "";
+  const ticketQrCodeUrl = ticketData
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=${encodeURIComponent(ticketQrPayload)}`
+    : "";
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlFirstName = params.get("firstName") || params.get("first_name") || "";
+    const urlLastName = params.get("lastName") || params.get("last_name") || "";
+    const urlMi = params.get("mi") || "";
+    const urlSrCode = params.get("srCode") || params.get("sr_code") || "";
+    const urlDept = params.get("dept") || params.get("department") || "";
+    const urlCourse = params.get("course") || "";
+    const urlYear = params.get("yearLevel") || params.get("year_level") || "";
+    const urlSec = params.get("section") || params.get("blockSection") || "";
+
+    if (urlSrCode || urlFirstName || urlLastName) {
+      setForm((prev) => ({
+        firstName: urlFirstName || prev.firstName,
+        lastName: urlLastName || prev.lastName,
+        mi: urlMi || prev.mi,
+        srCode: urlSrCode || prev.srCode,
+        dept: urlDept || prev.dept,
+        course: urlCourse || prev.course,
+        yearLevel: urlYear || prev.yearLevel,
+        section: urlSec || prev.section,
+      }));
+      setScanMessageType("success");
+      setScanMessage("Form pre-filled from scanned QR Code!");
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    function recalc() {
+      if (!cardRef.current) return;
+      const prevTransform = cardRef.current.style.transform;
+      cardRef.current.style.transform = "none";
+      const naturalHeight = cardRef.current.scrollHeight;
+      cardRef.current.style.transform = prevTransform;
+
+      const available = window.innerHeight - 16;
+      const nextScale = Math.min(1, available / naturalHeight);
+      setScale(nextScale);
+    }
+
+    recalc();
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    return () => {
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+    };
+  }, [photo, scanMessage]);
+
+  const coursesList = [
+    { value: "CICS", label: "CICS" },
+    { value: "COE", label: "COE" },
+    { value: "CET", label: "CET" },
+    { value: "CAFAD", label: "CAFAD" },
+    { value: "CAS", label: "CAS" },
+    { value: "CBA", label: "CBA" },
+  ];
+
+  const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+
+  const sectionsList = [
+    "Section 101",
+    "Section 102",
+    "Section 201",
+    "Section 202",
+    "Section 301",
+    "Section 302",
+    "Section 401",
+    "Section 402",
+  ];
+
+  function handleCourseSelect(selectedCourse) {
+    let dept = selectedCourse;
+    const c = selectedCourse.toLowerCase();
+    if (c.includes("information technology") || c.includes("computer science") || c === "cics") dept = "CICS";
+    else if (c.includes("engineering technology") || c.includes("industrial technology") || c === "cet") dept = "CET";
+    else if (c.includes("engineering") || c === "coe") dept = "COE";
+    else if (c.includes("architecture") || c === "cafad") dept = "CAFAD";
+    else if (c === "cas") dept = "CAS";
+    else if (c === "cba") dept = "CBA";
+
+    setForm((prev) => ({
+      ...prev,
+      course: selectedCourse,
+      dept,
+    }));
+  }
+
+  async function processImageUpload(file) {
+    if (!file) return;
+
+    setPhoto(URL.createObjectURL(file));
+    setScanMessage("");
+    setScanning(true);
+
+    try {
+      const body = new FormData();
+      body.append("photo", file);
+
+      const res = await fetch(`${BACKEND_URL}/extract-id`, {
+        method: "POST",
+        body,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Extraction failed");
+      }
+
+      const data = await res.json();
+
+      setForm((prev) => ({
+        firstName: data.first_name || prev.firstName,
+        lastName: data.last_name || prev.lastName,
+        mi: data.mi || prev.mi,
+        srCode: data.sr_code || prev.srCode,
+        course: data.course || prev.course,
+        dept: data.department || prev.dept,
+        yearLevel: prev.yearLevel,
+        section: prev.section,
+      }));
+
+      const source = data.extraction_source || "OCR Engine";
+      if (data.first_name || data.last_name || data.sr_code) {
+        setScanMessageType("success");
+        setScanMessage(`Extracted student details using ${source}!`);
+      } else {
+        setScanMessageType("error");
+        setScanMessage("Could not read ID details cleanly. Please fill in fields manually.");
+      }
+    } catch (err) {
+      setScanMessageType("error");
+      setScanMessage(err.message || "Couldn't reach scanning server. Fill in details manually.");
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (file) processImageUpload(file);
+  }
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setShowConfirm(true);
+  }
+
+  async function confirmRegistration() {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      const responseData = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(responseData.error || "Registration submission failed.");
+      }
+
+      setShowConfirm(false);
+      setTicketData(responseData);
+      setForm({ firstName: "", lastName: "", mi: "", srCode: "", dept: "CICS", course: "", yearLevel: "", section: "" });
+      setPhoto(null);
+      setScanMessage("");
+    } catch (err) {
+      alert(`Registration Error: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function refreshTicketStatus() {
+    if (!ticketData?.id && !ticketData?.sr_code) return;
+    try {
+      const target = ticketData.id || ticketData.sr_code;
+      const res = await fetch(`${BACKEND_URL}/ticket/${target}`);
+      if (res.ok) {
+        const updated = await res.json();
+        setTicketData((prev) => ({
+          ...prev,
+          attempts_used: updated.attempts_used,
+          max_attempts: updated.max_attempts,
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to refresh ticket status:", err);
+    }
+  }
+
+  async function punchTicketAtGameStation() {
+    if (!gameScanInput.trim()) return;
+    setGameScanLoading(true);
+    setGameScanResult(null);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/use-attempt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket: gameScanInput.trim() }),
+      });
+
+      const data = await res.json();
+      setGameScanResult(data);
+
+      if (ticketData && data.player && (data.player.id === ticketData.id || data.player.sr_code === ticketData.sr_code)) {
+        setTicketData((prev) => ({
+          ...prev,
+          attempts_used: data.attempts_used,
+        }));
+      }
+
+      if (data.status === "allowed") {
+        setTimeout(() => {
+          const player = data.player;
+          const attemptsRemaining = data.attempts_remaining;
+          const params = new URLSearchParams({
+            autostart: "true",
+            first_name: player.first_name || "",
+            last_name: player.last_name || "",
+            sr_code: player.sr_code || "",
+            course: player.course || "",
+            mi: player.mi || "",
+            department: player.department || "",
+            year_level: player.year_level || "",
+            section: player.section || "",
+            attempts_remaining: attemptsRemaining !== undefined ? String(attemptsRemaining) : "3",
+            ticket_token: player.ticket_token || ""
+          });
+          window.location.href = `${GAME_URL}/?${params.toString()}`;
+        }, 1500);
+      }
+    } catch (err) {
+      setGameScanResult({ status: "denied", error: err.message || "Game station server error" });
+    } finally {
+      setGameScanLoading(false);
+    }
+  }
+
+  return (
+    <div style={styles.page}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.25; }
+          50% { opacity: 1; }
+        }
+        .reg-input::placeholder {
+          color: rgba(148, 163, 184, 0.5);
+        }
+        .reg-input:focus {
+          border-color: ${colors.accent} !important;
+          box-shadow: 0 0 0 3px ${colors.accentGlow};
+        }
+        .reg-submit:active {
+          transform: scale(0.98);
+        }
+        .top-badge-btn:hover {
+          transform: scale(1.06);
+        }
+        .custom-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          color: #cbd5e1;
+        }
+        .custom-dropdown-item:hover {
+          background: rgba(99, 102, 241, 0.25) !important;
+          color: #ffffff !important;
+        }
+        .custom-dropdown-item.active {
+          background: rgba(99, 102, 241, 0.45) !important;
+          color: #ffffff !important;
+          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+      `}</style>
+      <Starfield />
+
+      <div
+        ref={cardRef}
+        style={{
+          ...styles.card,
+          transform: `scale(${scale})`,
+          transformOrigin: "top center",
+        }}
+      >
+        {/* Top Header Badge Controls */}
+        <div style={styles.badgeRow}>
+          <div style={styles.topIconGroup}>
+            <button
+              type="button"
+              className="top-badge-btn"
+              onClick={() => setShowQrModal(true)}
+              style={styles.topRoundBadge}
+              title="QR #1: Static Booth Registration QR Code"
+            >
+              <Sparkle size={16} color={colors.iconPurple} fill={colors.iconPurple} />
+            </button>
+
+            <button
+              type="button"
+              className="top-badge-btn"
+              onClick={() => {
+                setShowGameTester(true);
+                if (ticketData) {
+                  const token = ticketData.ticket_token
+                    ? `BSU-TICKET:${ticketData.ticket_token}`
+                    : `BSU-TICKET:${ticketData.id}:${ticketData.sr_code}`;
+                  setGameScanInput(token);
+                }
+              }}
+              style={{ ...styles.topRoundBadge, borderColor: "rgba(244, 213, 141, 0.4)" }}
+              title="Game Station Ticket Scanner Simulator"
+            >
+              <Gamepad2 size={16} color={colors.gold} />
+            </button>
+
+            <button
+              type="button"
+              className="top-badge-btn"
+              onClick={onOpenScanner}
+              style={{ ...styles.topRoundBadge, borderColor: "rgba(56, 189, 248, 0.4)" }}
+              title="Launch Live Camera Ticket Scanner"
+            >
+              <QrCode size={16} color={colors.cyan} />
+            </button>
+
+            <button
+              type="button"
+              className="top-badge-btn"
+              onClick={onOpenDashboard}
+              style={{ ...styles.topRoundBadge, borderColor: "rgba(129, 140, 248, 0.4)" }}
+              title="Launch Database Admin Dashboard"
+            >
+              <Database size={16} color={colors.iconPurple} />
+            </button>
+          </div>
+
+          {ticketData && (
+            <button
+              type="button"
+              style={styles.myTicketPillBtn}
+              onClick={() => setTicketData(ticketData)}
+            >
+              <Ticket size={14} color={colors.gold} />
+              <span>MY PASS</span>
+            </button>
+          )}
+        </div>
+
+        {/* Title Header Matching Mockup */}
+        <h1 style={styles.title}>
+          REGISTER
+          <br />
+          <span style={styles.titleAccent}>
+            <span style={styles.diamond}>✦</span>
+            PLAYER
+            <span style={styles.diamond}>✦</span>
+          </span>
+        </h1>
+
+        {/* SCAN SR-CODE Frame Box (Mockup Card Style) */}
+        <div style={styles.scannerBox} onClick={() => fileInputRef.current?.click()}>
+          <div style={styles.viewfinderFrame}>
+            <span style={styles.cornerTL} />
+            <span style={styles.cornerTR} />
+            <span style={styles.cornerBL} />
+            <span style={styles.cornerBR} />
+            {photo ? (
+              <img src={photo} alt="Preview" style={styles.photoPreview} />
+            ) : (
+              <div style={styles.cameraIconCircle}>
+                <Camera size={52} color={colors.gold} strokeWidth={1.5} />
+              </div>
+            )}
+          </div>
+
+          <div style={styles.scanCodeTitle}>
+            {scanning ? "SCANNING ID PHOTO..." : "SCAN SR-CODE"}
+          </div>
+          <div style={styles.scanCodeSubtext}>
+            Position the code within the frame to scan automatically
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handlePhotoChange}
+          style={{ display: "none" }}
+        />
+
+        {scanMessage && (
+          <div style={{
+            ...styles.scanMessageBox,
+            borderColor: scanMessageType === "success" ? colors.success : colors.danger,
+            color: scanMessageType === "success" ? colors.success : colors.danger,
+          }}>
+            {scanMessageType === "success" ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+            <span>{scanMessage}</span>
+          </div>
+        )}
+
+        {/* Divider ──────── OR ──────── */}
+        <div style={styles.dividerRow}>
+          <span style={styles.dividerLine} />
+          <span style={styles.dividerText}>OR</span>
+          <span style={styles.dividerLine} />
+        </div>
+
+        {/* Form Fields Matching Mockup Stack */}
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <Field icon={CreditCard}>
+            <input
+              className="reg-input"
+              style={styles.pillInput}
+              placeholder="SR-CODE"
+              value={form.srCode}
+              onChange={(e) => update("srCode", e.target.value)}
+              required
+            />
+          </Field>
+
+          <Field icon={User}>
+            <input
+              className="reg-input"
+              style={styles.pillInput}
+              placeholder="FIRST NAME"
+              value={form.firstName}
+              onChange={(e) => update("firstName", e.target.value)}
+              required
+            />
+          </Field>
+
+          <Field icon={User}>
+            <input
+              className="reg-input"
+              style={styles.pillInput}
+              placeholder="LAST NAME"
+              value={form.lastName}
+              onChange={(e) => update("lastName", e.target.value)}
+              required
+            />
+          </Field>
+
+          {/* Custom Dropdown for COURSE matching mockup */}
+          <CustomSelect
+            icon={GraduationCap}
+            placeholder="COURSE"
+            value={form.course}
+            options={coursesList}
+            onChange={(val) => handleCourseSelect(val)}
+          />
+
+          {/* Custom Dropdown for YEAR LEVEL matching mockup */}
+          <CustomSelect
+            icon={Layers}
+            placeholder="YEAR LEVEL"
+            value={form.yearLevel}
+            options={yearLevels}
+            onChange={(val) => update("yearLevel", val)}
+          />
+
+          {/* Plain text input for BLOCK / SECTION */}
+          <Field icon={LayoutGrid}>
+            <input
+              className="reg-input"
+              style={styles.pillInput}
+              placeholder="BLOCK / SECTION (e.g. 3301)"
+              value={form.section}
+              onChange={(e) => update("section", e.target.value)}
+            />
+          </Field>
+
+          <button type="submit" className="reg-submit" style={styles.submitBtn}>
+            <span>REGISTER NOW</span>
+            <Sparkle size={16} color="#ffffff" fill="#ffffff" />
+          </button>
+        </form>
+
+        {/* Footer Link matching mockup */}
+        <div style={styles.footerLinkRow}>
+          <span style={{ color: colors.textDim }}>Already registered? </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (ticketData) setTicketData(ticketData);
+              else setShowGameTester(true);
+            }}
+            style={styles.footerLinkBtn}
+          >
+            View Ticket
+          </button>
+        </div>
+      </div>
+
+      {/* Mountain Silhouette & Sunrise Glow at Bottom */}
+      <div style={styles.bottomSilhouetteContainer}>
+        <div style={styles.sunGlow} />
+        <svg viewBox="0 0 1440 220" style={styles.mountainSvg} preserveAspectRatio="none">
+          <path
+            fill="#010206"
+            d="M0,160L60,145C120,130,240,100,360,115C480,130,600,190,720,195C840,200,960,150,1080,125C1200,100,1320,100,1380,100L1440,100L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,480,320,360,320C240,320,120,320,60,320L0,320Z"
+          />
+        </svg>
+      </div>
+
+      {/* QR #2: DIGITAL GAME PASS TICKET MODAL */}
+      {ticketData && (
+        <div style={styles.modalOverlay}>
+          {/* Mini starfield inside modal */}
+          <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+            {Array.from({ length: 30 }).map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  top: `${Math.random() * 100}%`,
+                  left: `${Math.random() * 100}%`,
+                  width: Math.random() * 2 + 1,
+                  height: Math.random() * 2 + 1,
+                  borderRadius: "50%",
+                  background: colors.star,
+                  opacity: Math.random() * 0.5 + 0.2,
+                  animation: `twinkle 3s ease-in-out ${Math.random() * 3}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{
+            position: "relative",
+            width: "100%",
+            maxWidth: 340,
+            background: "linear-gradient(160deg, #070c1a 0%, #030712 100%)",
+            border: `1px solid rgba(244, 213, 141, 0.3)`,
+            borderRadius: 28,
+            padding: "20px 18px 22px",
+            boxShadow: "0 30px 70px rgba(0,0,0,0.85)",
+            fontFamily: "'Outfit', system-ui, sans-serif",
+            zIndex: 1,
+          }}>
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => setTicketData(null)}
+              style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: colors.textDim, cursor: "pointer", zIndex: 2 }}
+            >
+              <X size={20} />
+            </button>
+
+            {/* Header matching main form title style */}
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: colors.textDim, marginBottom: 2 }}>
+                BSU INTRAMURALS 2025
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2, color: colors.text, lineHeight: 1.1 }}>
+                GAME PASS
+              </div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                <span style={{ color: colors.gold, fontSize: 13 }}>✦</span>
+                <span style={{ color: colors.gold, fontWeight: 800, fontSize: 13, letterSpacing: 3 }}>TICKET</span>
+                <span style={{ color: colors.gold, fontSize: 13 }}>✦</span>
+              </div>
+            </div>
+
+            {/* Welcome back banner */}
+            {ticketData.already_registered && (
+              <div style={{
+                background: "rgba(56, 189, 248, 0.1)",
+                border: `1px solid rgba(56, 189, 248, 0.35)`,
+                color: colors.cyan,
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "5px 10px",
+                borderRadius: 8,
+                marginBottom: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                letterSpacing: 0.5,
+              }}>
+                <CheckCircle2 size={12} />
+                <span>WELCOME BACK — EXISTING GAME PASS RETRIEVED</span>
+              </div>
+            )}
+
+            {/* Player info card */}
+            <div style={{
+              background: "rgba(15, 23, 42, 0.6)",
+              border: `1px solid rgba(255,255,255,0.06)`,
+              borderRadius: 16,
+              padding: "12px 14px",
+              marginBottom: 14,
+              textAlign: "left",
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: colors.text, letterSpacing: 0.5 }}>
+                {ticketData.first_name} {ticketData.mi ? ticketData.mi + "." : ""} {ticketData.last_name}
+              </div>
+              <div style={{ fontSize: 11, color: colors.cyan, fontWeight: 700, marginTop: 3, letterSpacing: 0.5 }}>
+                {ticketData.sr_code}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                {ticketData.department && (
+                  <span style={{ background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.35)", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700, color: colors.iconPurple }}>
+                    {ticketData.department}
+                  </span>
+                )}
+                {ticketData.course && (
+                  <span style={{ background: "rgba(244,213,141,0.1)", border: "1px solid rgba(244,213,141,0.25)", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600, color: colors.gold }}>
+                    {ticketData.course}
+                  </span>
+                )}
+                {ticketData.year_level && (
+                  <span style={{ background: "rgba(56,189,248,0.1)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600, color: colors.cyan }}>
+                    {ticketData.year_level}
+                  </span>
+                )}
+                {ticketData.section && (
+                  <span style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.25)", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 600, color: colors.success }}>
+                    {ticketData.section}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* QR Code with gold viewfinder corners matching main form */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <div style={{ position: "relative", padding: 14, background: "#ffffff", borderRadius: 18, boxShadow: "0 8px 30px rgba(0,0,0,0.6)", display: "inline-block" }}>
+                {/* Gold corner brackets */}
+                <span style={{ position: "absolute", top: 4, left: 4, width: 20, height: 20, borderTop: `3px solid ${colors.gold}`, borderLeft: `3px solid ${colors.gold}`, borderTopLeftRadius: 8 }} />
+                <span style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderTop: `3px solid ${colors.gold}`, borderRight: `3px solid ${colors.gold}`, borderTopRightRadius: 8 }} />
+                <span style={{ position: "absolute", bottom: 4, left: 4, width: 20, height: 20, borderBottom: `3px solid ${colors.gold}`, borderLeft: `3px solid ${colors.gold}`, borderBottomLeftRadius: 8 }} />
+                <span style={{ position: "absolute", bottom: 4, right: 4, width: 20, height: 20, borderBottom: `3px solid ${colors.gold}`, borderRight: `3px solid ${colors.gold}`, borderBottomRightRadius: 8 }} />
+                <img src={ticketQrCodeUrl} alt="Game Pass QR Code" style={{ width: 195, height: 195, display: "block", borderRadius: 10 }} />
+              </div>
+            </div>
+
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <p style={{ color: colors.gold, fontSize: 10, fontWeight: 700, letterSpacing: 1, margin: "0 0 4px" }}>
+                SCAN AT GAME STATION TO START YOUR SESSION
+              </p>
+              {ticketData.ticket_token && (
+                <p style={{ color: colors.textDim, fontSize: 9, fontWeight: 600, letterSpacing: 0.5, margin: 0, fontFamily: "monospace" }}>
+                  ID: {ticketData.ticket_token.split("-")[0].toUpperCase()}···{ticketData.ticket_token.split("-").pop().toUpperCase()}
+                </p>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+              <span style={{ color: colors.textDim, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>ATTEMPTS</span>
+              <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }} />
+            </div>
+
+            {/* Attempt slots */}
+            <div style={{
+              background: "rgba(15, 23, 42, 0.5)",
+              border: `1px solid rgba(255,255,255,0.06)`,
+              borderRadius: 14,
+              padding: "10px 12px",
+              marginBottom: 14,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+                <span style={{ color: colors.textDim, letterSpacing: 0.5 }}>GAME SESSIONS</span>
+                <span style={{ color: (ticketData.attempts_used || 0) >= 3 ? colors.danger : colors.success }}>
+                  {Math.max(0, 3 - (ticketData.attempts_used || 0))} / 3 REMAINING
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[1, 2, 3].map((num) => {
+                  const isUsed = (ticketData.attempts_used || 0) >= num;
+                  return (
+                    <div
+                      key={num}
+                      style={{
+                        flex: 1,
+                        padding: "8px 4px",
+                        borderRadius: 10,
+                        background: isUsed ? "rgba(248,113,113,0.12)" : "rgba(74,222,128,0.12)",
+                        border: `1px solid ${isUsed ? colors.danger : colors.success}`,
+                        color: isUsed ? colors.danger : colors.success,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      <span style={{ fontSize: 14 }}>{isUsed ? "❌" : "🎟️"}</span>
+                      <span style={{ fontSize: 9, letterSpacing: 0.5 }}>{isUsed ? "USED" : "READY"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={refreshTicketStatus}
+                style={{
+                  flex: 1,
+                  height: 42,
+                  borderRadius: 14,
+                  border: `1px solid rgba(255,255,255,0.1)`,
+                  background: "rgba(15,23,42,0.6)",
+                  color: colors.text,
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <RefreshCw size={13} /> REFRESH
+              </button>
+              <button
+                type="button"
+                style={{
+                  flex: 1.5,
+                  height: 42,
+                  borderRadius: 14,
+                  border: `1px solid rgba(168,85,247,0.4)`,
+                  background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
+                  boxShadow: `0 6px 18px ${colors.accentGlow}`,
+                  color: colors.text,
+                  fontFamily: "inherit",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+                onClick={() => setTicketData(null)}
+              >
+                DONE <Sparkle size={13} color="#fff" fill="#fff" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* GAME STATION TICKET SCANNER TESTER MODAL */}
+      {showGameTester && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCard, maxWidth: 360 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Gamepad2 size={20} color={colors.gold} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: colors.gold }}>
+                  Game Station Ticket Scanner
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGameTester(false);
+                  setGameScanResult(null);
+                }}
+                style={{ background: "none", border: "none", color: colors.textDim, cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ color: colors.textDim, fontSize: 11, marginBottom: 12, lineHeight: 1.4 }}>
+              Simulate the Game Station camera scanning QR #2 off a player's phone screen.
+            </p>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: colors.textDim, marginBottom: 4 }}>
+                SCANNED TICKET QR DATA / SR-CODE
+              </label>
+              <input
+                className="reg-input"
+                style={styles.pillInput}
+                placeholder="e.g. BSU-TICKET:1:21-08957 or 21-08957"
+                value={gameScanInput}
+                onChange={(e) => setGameScanInput(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="reg-submit"
+              onClick={punchTicketAtGameStation}
+              disabled={gameScanLoading || !gameScanInput.trim()}
+              style={{ ...styles.submitBtn, width: "100%", marginBottom: 14 }}
+            >
+              {gameScanLoading ? "Validating Ticket..." : "Scan & Punch Ticket Pass"}
+            </button>
+
+            {gameScanResult && (
+              <div
+                style={{
+                  background: gameScanResult.status === "allowed" ? "rgba(74, 222, 128, 0.12)" : "rgba(248, 113, 113, 0.12)",
+                  border: `1px solid ${gameScanResult.status === "allowed" ? colors.success : colors.danger}`,
+                  borderRadius: 12,
+                  padding: 12,
+                  textAlign: "left",
+                }}
+              >
+                <div
+                  style={{
+                    color: gameScanResult.status === "allowed" ? colors.success : colors.danger,
+                    fontWeight: 800,
+                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 4,
+                  }}
+                >
+                  {gameScanResult.status === "allowed" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>{gameScanResult.status === "allowed" ? "SESSION ALLOWED!" : "SESSION DENIED!"}</span>
+                </div>
+
+                <div style={{ fontSize: 12, color: colors.text, fontWeight: 600 }}>
+                  {gameScanResult.message || gameScanResult.error}
+                </div>
+
+                {gameScanResult.player && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: colors.textDim, borderTop: `1px solid rgba(255,255,255,0.1)`, paddingTop: 6 }}>
+                    <div><strong>Player:</strong> {gameScanResult.player.first_name} {gameScanResult.player.last_name}</div>
+                    <div><strong>SR-Code:</strong> {gameScanResult.player.sr_code}</div>
+                    <div><strong>Attempts Used:</strong> {gameScanResult.attempts_used} / 3</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* QR #1: BOOTH REGISTRATION QR CODE MODAL */}
+      {showQrModal && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCard, textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h2 style={{ ...styles.modalTitle, margin: 0 }}>Booth QR Code #1</h2>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                style={{ background: "none", border: "none", color: colors.textDim, cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ color: colors.textDim, fontSize: 12, marginBottom: 16 }}>
+              Print or display this static QR Code at the registration booth. Users scan it with their phone camera to open the registration form!
+            </p>
+
+            <div style={styles.qrDisplayBox}>
+              <img src={boothQrCodeUrl} alt="Booth Registration QR Code" style={{ width: 220, height: 220, borderRadius: 12 }} />
+            </div>
+
+            <div style={{ marginTop: 14, wordBreak: "break-all", fontSize: 11, color: colors.cyan }}>
+              {currentRegistrationUrl}
+            </div>
+
+            <button
+              type="button"
+              style={{ ...styles.modalConfirmBtn, width: "100%", marginTop: 16 }}
+              onClick={() => setShowQrModal(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirm && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <h2 style={styles.modalTitle}>Confirm Registration Details</h2>
+            <div style={styles.modalRow}>
+              <span style={styles.modalLabel}>Name</span>
+              <span style={styles.modalValue}>
+                {form.firstName} {form.lastName}
+              </span>
+            </div>
+            <div style={styles.modalRow}>
+              <span style={styles.modalLabel}>SR-Code</span>
+              <span style={styles.modalValue}>{form.srCode}</span>
+            </div>
+            <div style={styles.modalRow}>
+              <span style={styles.modalLabel}>Course</span>
+              <span style={styles.modalValue}>{form.course}</span>
+            </div>
+            <div style={styles.modalRow}>
+              <span style={styles.modalLabel}>Year Level</span>
+              <span style={styles.modalValue}>{form.yearLevel}</span>
+            </div>
+            <div style={styles.modalRow}>
+              <span style={styles.modalLabel}>Section</span>
+              <span style={styles.modalValue}>{form.section}</span>
+            </div>
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                style={styles.modalCancelBtn}
+                onClick={() => setShowConfirm(false)}
+                disabled={submitting}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                className="reg-submit"
+                style={styles.modalConfirmBtn}
+                onClick={confirmRegistration}
+                disabled={submitting}
+              >
+                {submitting ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ icon: Icon, children }) {
+  return (
+    <div style={styles.fieldContainer}>
+      {Icon && (
+        <div style={styles.fieldIconBox}>
+          <Icon size={18} color={colors.iconPurple} strokeWidth={2} />
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function CustomSelect({ icon: Icon, placeholder, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((o) => (typeof o === "string" ? o : o.value) === value);
+  const displayLabel = selectedOption
+    ? typeof selectedOption === "string" ? selectedOption : selectedOption.label
+    : placeholder;
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%", zIndex: open ? 100 : 1 }}>
+      <button
+        type="button"
+        style={{
+          ...styles.pillSelectBtn,
+          borderColor: open ? colors.accent : colors.inputBorder,
+          boxShadow: open ? `0 0 0 3px ${colors.accentGlow}` : "none",
+        }}
+        onClick={() => setOpen(!open)}
+      >
+        <div style={styles.fieldIconBox}>
+          <Icon size={18} color={colors.iconPurple} strokeWidth={2} />
+        </div>
+        <span
+          style={{
+            ...styles.selectBtnText,
+            color: value ? colors.text : "rgba(148, 163, 184, 0.5)",
+          }}
+        >
+          {displayLabel}
+        </span>
+        <div style={styles.selectChevron}>
+          <ChevronDown
+            size={18}
+            color={colors.gold}
+            strokeWidth={2.5}
+            style={{
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+            }}
+          />
+        </div>
+      </button>
+
+      {/* Floating Custom Dropdown Popup matching mockup */}
+      {open && (
+        <div style={styles.floatingDropdownMenu}>
+          {options.map((opt) => {
+            const val = typeof opt === "string" ? opt : opt.value;
+            const label = typeof opt === "string" ? opt : opt.label;
+            const isSelected = val === value;
+
+            return (
+              <div
+                key={val}
+                className={`custom-dropdown-item ${isSelected ? "active" : ""}`}
+                style={{
+                  ...styles.dropdownItem,
+                  background: isSelected ? "rgba(99, 102, 241, 0.4)" : "transparent",
+                  color: isSelected ? "#ffffff" : "#cbd5e1",
+                  fontWeight: isSelected ? 700 : 500,
+                  boxShadow: isSelected ? "0 4px 12px rgba(99, 102, 241, 0.3)" : "none",
+                }}
+                onClick={() => {
+                  onChange(val);
+                  setOpen(false);
+                }}
+              >
+                <span style={{ color: isSelected ? colors.gold : colors.iconPurple, fontSize: 20, fontWeight: 800, lineHeight: 1 }}>
+                  ✦
+                </span>
+                <span style={{ flex: 1, letterSpacing: 0.5 }}>{label}</span>
+                {isSelected && <Check size={14} color={colors.gold} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  page: {
+    position: "relative",
+    height: "100dvh",
+    minHeight: "100dvh",
+    maxHeight: "100dvh",
+    width: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    padding: "10px 16px 20px",
+    background: colors.bg,
+    fontFamily: "'Outfit', system-ui, sans-serif",
+    overflow: "hidden",
+    boxSizing: "border-box",
+  },
+  starfield: {
+    position: "absolute",
+    inset: 0,
+    overflow: "hidden",
+    pointerEvents: "none",
+  },
+  card: {
+    position: "relative",
+    zIndex: 2,
+    width: "100%",
+    maxWidth: 350,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  badgeRow: {
+    width: "100%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  topIconGroup: {
+    display: "flex",
+    gap: 8,
+  },
+  topRoundBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    background: "rgba(15, 23, 42, 0.8)",
+    border: `1px solid ${colors.accentGlow}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    transition: "transform 0.2s",
+    padding: 0,
+  },
+  myTicketPillBtn: {
+    background: "rgba(15, 23, 42, 0.8)",
+    border: `1px solid ${colors.gold}`,
+    color: colors.gold,
+    borderRadius: 12,
+    padding: "5px 12px",
+    fontSize: 11,
+    fontWeight: 800,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  title: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: 800,
+    letterSpacing: 2,
+    textAlign: "center",
+    lineHeight: 1.2,
+    margin: "4px 0 14px",
+  },
+  titleAccent: {
+    color: colors.gold,
+    fontSize: 22,
+    fontWeight: 800,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    letterSpacing: 3,
+  },
+  diamond: {
+    color: colors.gold,
+    fontSize: 14,
+  },
+  scannerBox: {
+    width: "100%",
+    background: colors.cardBg,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 22,
+    padding: "16px 14px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    cursor: "pointer",
+    boxSizing: "border-box",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+  },
+  viewfinderFrame: {
+    position: "relative",
+    width: 160,
+    height: 160,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  cameraIconCircle: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cornerTL: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 18,
+    height: 18,
+    borderTop: `2.5px solid ${colors.gold}`,
+    borderLeft: `2.5px solid ${colors.gold}`,
+    borderTopLeftRadius: 6,
+  },
+  cornerTR: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderTop: `2.5px solid ${colors.gold}`,
+    borderRight: `2.5px solid ${colors.gold}`,
+    borderTopRightRadius: 6,
+  },
+  cornerBL: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 18,
+    height: 18,
+    borderBottom: `2.5px solid ${colors.gold}`,
+    borderLeft: `2.5px solid ${colors.gold}`,
+    borderBottomLeftRadius: 6,
+  },
+  cornerBR: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderBottom: `2.5px solid ${colors.gold}`,
+    borderRight: `2.5px solid ${colors.gold}`,
+    borderBottomRightRadius: 6,
+  },
+  photoPreview: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    borderRadius: 8,
+  },
+  scanCodeTitle: {
+    color: colors.gold,
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: 1.5,
+    margin: "2px 0 2px",
+  },
+  scanCodeSubtext: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontWeight: 500,
+    textAlign: "center",
+  },
+  scanMessageBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    background: colors.cardBg,
+    padding: "6px 12px",
+    borderRadius: 10,
+    border: "1px solid",
+    marginTop: 10,
+    maxWidth: 320,
+    textAlign: "center",
+  },
+  dividerRow: {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    margin: "14px 0 12px",
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    background: "rgba(255, 255, 255, 0.08)",
+  },
+  dividerText: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 1,
+  },
+  form: {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  fieldContainer: {
+    position: "relative",
+    width: "100%",
+  },
+  fieldIconBox: {
+    position: "absolute",
+    left: 16,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    zIndex: 2,
+    display: "flex",
+    alignItems: "center",
+  },
+  pillInput: {
+    width: "100%",
+    height: 46,
+    borderRadius: 14,
+    border: `1px solid ${colors.inputBorder}`,
+    background: colors.inputBg,
+    color: colors.text,
+    fontFamily: "inherit",
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: 0.5,
+    padding: "0 16px 0 46px",
+    outline: "none",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+  },
+  pillSelectBtn: {
+    position: "relative",
+    width: "100%",
+    height: 46,
+    borderRadius: 14,
+    border: `1px solid ${colors.inputBorder}`,
+    background: colors.inputBg,
+    color: colors.text,
+    fontFamily: "inherit",
+    fontSize: 13,
+    fontWeight: 600,
+    letterSpacing: 0.5,
+    padding: "0 40px 0 46px",
+    outline: "none",
+    boxSizing: "border-box",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+  },
+  selectBtnText: {
+    flex: 1,
+    textAlign: "left",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  floatingDropdownMenu: {
+    position: "absolute",
+    top: "calc(100% + 6px)",
+    left: 0,
+    right: 0,
+    background: "rgba(11, 17, 33, 0.95)",
+    backdropFilter: "blur(16px)",
+    border: `1px solid rgba(99, 102, 241, 0.35)`,
+    borderRadius: 16,
+    padding: 6,
+    boxShadow: "0 16px 36px rgba(0,0,0,0.8)",
+    zIndex: 100,
+    maxHeight: 220,
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  dropdownItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 14px",
+    borderRadius: 12,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: "all 0.15s ease",
+  },
+  selectChevron: {
+    position: "absolute",
+    right: 16,
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    display: "flex",
+    alignItems: "center",
+  },
+  submitBtn: {
+    marginTop: 4,
+    height: 48,
+    borderRadius: 16,
+    border: `1px solid rgba(168, 85, 247, 0.4)`,
+    background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
+    boxShadow: `0 8px 24px ${colors.accentGlow}`,
+    color: colors.text,
+    fontFamily: "inherit",
+    fontWeight: 800,
+    fontSize: 14,
+    letterSpacing: 1.5,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    transition: "transform 0.1s",
+  },
+  footerLinkRow: {
+    marginTop: 12,
+    fontSize: 11,
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  footerLinkBtn: {
+    background: "none",
+    border: "none",
+    color: colors.iconPurple,
+    fontWeight: 700,
+    fontSize: 11,
+    cursor: "pointer",
+    textDecoration: "underline",
+    padding: 0,
+  },
+  bottomSilhouetteContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 140,
+    pointerEvents: "none",
+    overflow: "hidden",
+    zIndex: 1,
+  },
+  sunGlow: {
+    position: "absolute",
+    bottom: -30,
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: 260,
+    height: 90,
+    borderRadius: "50%",
+    background: "radial-gradient(circle, rgba(245, 158, 11, 0.45) 0%, rgba(245, 158, 11, 0) 75%)",
+    filter: "blur(15px)",
+  },
+  mountainSvg: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: "100%",
+    height: 90,
+  },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.88)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 10,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 320,
+    background: colors.cardBg,
+    border: `1px solid ${colors.inputBorder}`,
+    borderRadius: 20,
+    padding: "22px 20px",
+    boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+    fontFamily: "'Outfit', system-ui, sans-serif",
+  },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: 700,
+    margin: "0 0 16px",
+  },
+  modalRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "8px 0",
+    borderBottom: `1px solid rgba(255,255,255,0.08)`,
+  },
+  modalLabel: { color: colors.textDim, fontSize: 12, fontWeight: 600 },
+  modalValue: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: 600,
+    textAlign: "right",
+  },
+  modalActions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 20,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 14,
+    border: `1px solid rgba(255,255,255,0.1)`,
+    background: "transparent",
+    color: colors.text,
+    fontFamily: "inherit",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 14,
+    border: "none",
+    background: colors.accent,
+    boxShadow: `0 6px 18px ${colors.accentGlow}`,
+    color: colors.text,
+    fontFamily: "inherit",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  qrDisplayBox: {
+    background: "#ffffff",
+    padding: 12,
+    borderRadius: 16,
+    display: "inline-block",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+  },
+};

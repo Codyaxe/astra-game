@@ -24,10 +24,11 @@ def create_app(config_name: str | None = None) -> Flask:
     app.config.from_object(config_by_name[config_name])
 
     # CORS — allow Vite dev server and local network devices to call the API
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, resources={r"/*": {"origins": "*"}})
 
     # Register blueprints
-    app.register_blueprint(auth_bp)
+    app.register_blueprint(auth_bp) # /api/auth
+    app.register_blueprint(auth_bp, url_prefix="", name="auth_root") # root aliases for legacy forms
     app.register_blueprint(game_bp)
     app.register_blueprint(constellations_bp)
     app.register_blueprint(leaderboard_bp)

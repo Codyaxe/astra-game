@@ -17,8 +17,13 @@ from models.player import (
     get_player_by_id,
     get_player_by_sr_code,
     get_player_by_ticket,
+    get_all_players,
+    reset_player_attempts,
+    delete_player,
+    find_player_by_ticket_or_sr,
     MAX_ATTEMPTS,
 )
+from database.db import execute
 from services.ocr_service import extract_student_id_info
  
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -104,6 +109,7 @@ def register():
 
         return jsonify({
             "player": existing,
+            "qr_ticket_code": existing["qr_ticket_code"],
             "attempts_remaining": max(0, MAX_ATTEMPTS - existing["total_attempts_used"]),
             "message": "Player already registered.",
         }), 200
@@ -119,13 +125,42 @@ def register():
     status = 201 if is_new else 200
     body = {
         "player": player,
+        "qr_ticket_code": player["qr_ticket_code"],
         "attempts_remaining": max(0, MAX_ATTEMPTS - player["total_attempts_used"]),
     }
     if is_new:
-        body["qr_ticket_code"] = player["qr_ticket_code"]
+        body["message"] = "Registration successful."
     else:
         body["message"] = "Player already registered."
     return jsonify(body), status
+
+
+@auth_bp.route("/extract-id", methods=["POST"])
+def extract_id():
+    """
+    Accept an uploaded student ID card image and extract student information.
+    """
+    file = request.files.get("image") or request.files.get("photo")
+    if not file:
+        return jsonify({"success": False, "error": "No image file provided"}), 400
+
+    try:
+        extracted = extract_student_id_info(file.stream)
+        return jsonify({
+            "success": True,
+            "data": extracted,
+            "message": "ID card scanned successfully",
+        }), 200
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "error": f"Failed to extract ID info: {str(exc)}",
+            "data": {
+                "firstName": "", "lastName": "", "mi": "",
+                "srCode": "", "course": "", "dept": "CICS",
+                "yearLevel": "1st Year", "section": "1101"
+            }
+        }), 200
  
  
 @auth_bp.route("/mobile-register", methods=["POST"])
@@ -188,6 +223,100 @@ def mobile_register():
     if not is_new:
         body["message"] = "Existing player record loaded."
     return jsonify(body), status
+
+
+@auth_bp.route("/use-attempt", methods=["POST"])
+def use_attempt():
+    """
+    Kiosk / Game station ticket puncher.
+    Consumes 1 attempt if available and returns player authorization.
+    """
+    data = request.get_json(silent=True) or {}
+    ticket = data.get("ticket", "").strip() or data.get("qr_ticket_code", "").strip()
+    if not ticket:
+        return jsonify({"status": "denied", "error": "No ticket provided"}), 400
+
+    player = find_player_by_ticket_or_sr(ticket)
+    if not player:
+        return jsonify({"status": "denied", "error": "Ticket / Player not found"}), 404
+
+    attempts_used = player["total_attempts_used"]
+    if attempts_used >= MAX_ATTEMPTS:
+        return jsonify({
+            "status": "denied",
+            "error": f"Maximum attempts reached ({MAX_ATTEMPTS}/{MAX_ATTEMPTS})",
+            "player": player,
+            "attempts_used": attempts_used,
+            "attempts_remaining": 0,
+        }), 200
+
+    # Allowed: return player info
+    remaining = MAX_ATTEMPTS - attempts_used
+    return jsonify({
+        "status": "allowed",
+        "message": f"Ticket verified. Attempt {attempts_used + 1} of {MAX_ATTEMPTS}.",
+        "player": player,
+        "attempts_used": attempts_used,
+        "attempts_remaining": remaining,
+    }), 200
+
+
+@auth_bp.route("/ticket/<target>", methods=["GET"])
+def get_ticket(target):
+    """
+    Retrieve player ticket by token or SR code.
+    """
+    player = find_player_by_ticket_or_sr(target)
+    if not player:
+        return jsonify({"error": "Ticket not found"}), 404
+
+    return jsonify({
+        "player": player,
+        "qr_ticket_code": player["qr_ticket_code"],
+        "attempts_remaining": max(0, MAX_ATTEMPTS - player["total_attempts_used"]),
+        "attempts_used": player["total_attempts_used"],
+    }), 200
+
+
+@auth_bp.route("/registrations", methods=["GET"])
+def list_registrations():
+    """
+    Admin dashboard: list all registrations.
+    """
+    players = get_all_players()
+    return jsonify({"registrations": players, "count": len(players)}), 200
+
+
+@auth_bp.route("/registrations/<int:player_id>/reset", methods=["POST"])
+def reset_registration(player_id):
+    """
+    Admin dashboard: reset attempts for a player.
+    """
+    player = get_player_by_id(player_id)
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    reset_player_attempts(player_id)
+    updated = get_player_by_id(player_id)
+    return jsonify({
+        "success": True,
+        "message": "Player attempts reset to 0",
+        "player": updated
+    }), 200
+
+
+@auth_bp.route("/registrations/<int:player_id>", methods=["DELETE"])
+def delete_registration(player_id):
+    """
+    Admin dashboard: delete a player record.
+    """
+    player = get_player_by_id(player_id)
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    delete_player(player_id)
+    return jsonify({"success": True, "message": "Player registration deleted"}), 200
+
 
 @auth_bp.route("/player/<int:player_id>", methods=["GET"])
 def get_player(player_id):
