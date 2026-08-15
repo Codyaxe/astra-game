@@ -1,16 +1,35 @@
 /**
- * motionSmoothing.js — Dynamic Velocity-Adaptive Pointer Smoothing (One-Euro Filter)
- *
- * Eliminates camera tracking jitter:
- * - At low speeds / holding still: High smoothing (eliminates tremor & sensor noise).
- * - At high speeds / sweeping: Low smoothing (zero latency & instant responsiveness).
+ * motionSmoothing.js — Ultra-Responsive 1€ Filter with Diagnostic Telemetry Logging
  */
 
+class LowPassFilter {
+  constructor(alpha = 1.0) {
+    this.alpha = alpha;
+    this.s = null;
+    this.lastRaw = null;
+  }
+
+  reset() {
+    this.s = null;
+    this.lastRaw = null;
+  }
+
+  filter(value, alpha = this.alpha) {
+    this.lastRaw = value;
+    if (this.s === null) {
+      this.s = value;
+      return value;
+    }
+    this.s = alpha * value + (1.0 - alpha) * this.s;
+    return this.s;
+  }
+}
+
 export class MotionSmoother {
-  constructor(minCutoff = 1.0, beta = 0.007, dCutoff = 1.0) {
-    this.minCutoff = minCutoff; // Minimum cutoff frequency (lower = smoother when still)
-    this.beta = beta;           // Velocity coefficient (higher = faster response when moving)
-    this.dCutoff = dCutoff;     // Derivative cutoff frequency
+  constructor(minCutoff = 1.5, beta = 0.05, dCutoff = 1.5) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
 
     this.xFilter = new LowPassFilter();
     this.yFilter = new LowPassFilter();
@@ -21,6 +40,8 @@ export class MotionSmoother {
     this.dzFilter = new LowPassFilter();
 
     this.lastTime = null;
+    this.prevRaw = null;
+    this.lastLogTime = 0;
   }
 
   reset() {
@@ -31,13 +52,15 @@ export class MotionSmoother {
     this.dyFilter.reset();
     this.dzFilter.reset();
     this.lastTime = null;
+    this.prevRaw = null;
   }
 
-  smooth(rawPoint, timestamp = Date.now()) {
+  smooth(rawPoint, timestamp = performance.now()) {
     if (!rawPoint) return null;
 
-    if (this.lastTime === null) {
+    if (this.lastTime === null || this.prevRaw === null) {
       this.lastTime = timestamp;
+      this.prevRaw = { ...rawPoint };
       return {
         x: this.xFilter.filter(rawPoint.x, 1.0),
         y: this.yFilter.filter(rawPoint.y, 1.0),
@@ -46,12 +69,14 @@ export class MotionSmoother {
     }
 
     const dt = Math.max((timestamp - this.lastTime) / 1000.0, 0.001);
+    const fps = Math.round(1.0 / dt);
     this.lastTime = timestamp;
 
-    // 1. Calculate rate of change (velocity derivative)
-    const dx = (rawPoint.x - (this.xFilter.lastRaw || rawPoint.x)) / dt;
-    const dy = (rawPoint.y - (this.yFilter.lastRaw || rawPoint.y)) / dt;
-    const dz = ((rawPoint.z || 0) - (this.zFilter.lastRaw || 0)) / dt;
+    // 1. Calculate instantaneous velocity derivative
+    const dx = (rawPoint.x - this.prevRaw.x) / dt;
+    const dy = (rawPoint.y - this.prevRaw.y) / dt;
+    const dz = ((rawPoint.z || 0) - (this.prevRaw.z || 0)) / dt;
+    this.prevRaw = { ...rawPoint };
 
     const edx = this.dxFilter.filter(dx, this._alpha(dt, this.dCutoff));
     const edy = this.dyFilter.filter(dy, this._alpha(dt, this.dCutoff));
@@ -59,43 +84,39 @@ export class MotionSmoother {
 
     const speed = Math.sqrt(edx * edx + edy * edy + edz * edz);
 
-    // 2. Adaptive cutoff: increase frequency as speed increases
+    // Diagnostic logging (every 300ms or when fast moving)
+    const now = performance.now();
+    if (speed > 0.8 || now - this.lastLogTime > 400) {
+      this.lastLogTime = now;
+      console.log(
+        `[TRACKING] 📊 FPS: ${fps} | Speed: ${speed.toFixed(2)} | ` +
+        (speed > 1.2 ? `⚡ FAST-BYPASS (0ms lag)` : `🎯 SMOOTHED (alpha=${this._alpha(dt, this.minCutoff + this.beta * speed).toFixed(3)})`) +
+        ` | Pos: (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)})`
+      );
+    }
+
+    // 2. High-speed fast-bypass: If moving fast, lock alpha to 1.0 for instant zero-latency tracking
+    if (speed > 1.2) {
+      return {
+        x: this.xFilter.filter(rawPoint.x, 1.0),
+        y: this.yFilter.filter(rawPoint.y, 1.0),
+        z: this.zFilter.filter(rawPoint.z || 0, 1.0),
+      };
+    }
+
+    // 3. Dynamic Cutoff Frequency (One-Euro formulation)
     const cutoff = this.minCutoff + this.beta * speed;
     const alpha = this._alpha(dt, cutoff);
 
-    // 3. Filter coordinates
-    const sx = this.xFilter.filter(rawPoint.x, alpha);
-    const sy = this.yFilter.filter(rawPoint.y, alpha);
-    const sz = this.zFilter.filter(rawPoint.z || 0, alpha);
-
-    return { x: sx, y: sy, z: sz };
+    return {
+      x: this.xFilter.filter(rawPoint.x, alpha),
+      y: this.yFilter.filter(rawPoint.y, alpha),
+      z: this.zFilter.filter(rawPoint.z || 0, alpha),
+    };
   }
 
   _alpha(dt, cutoff) {
     const tau = 1.0 / (2 * Math.PI * cutoff);
     return 1.0 / (1.0 + tau / dt);
-  }
-}
-
-class LowPassFilter {
-  constructor() {
-    this.lastFiltered = null;
-    this.lastRaw = null;
-  }
-
-  reset() {
-    this.lastFiltered = null;
-    this.lastRaw = null;
-  }
-
-  filter(value, alpha) {
-    this.lastRaw = value;
-    if (this.lastFiltered === null) {
-      this.lastFiltered = value;
-      return value;
-    }
-    const filtered = alpha * value + (1.0 - alpha) * this.lastFiltered;
-    this.lastFiltered = filtered;
-    return filtered;
   }
 }

@@ -101,6 +101,8 @@ export default function ChallengeScreen({
   const timeLimit = constellationList?.timeLimitSec || 30;
   const { timeLeft, start: startTimer } = useGameTimer(timeLimit, handleTimerExpire);
 
+  const lastMistakeTimeRef = useRef(0);
+
   // Connection Handler (used by hover glide AND mouse/wand clicks)
   const tryConnectToNode = useCallback((targetNode) => {
     if (isCompletedRef.current || !constellationList || !targetNode) return;
@@ -108,8 +110,14 @@ export default function ChallengeScreen({
     const currentActive = activeNodeRef.current;
     if (!currentActive) return;
 
-    // Ignore if already at the target star
+    // Ignore if already at the current active star
     if (currentActive.id === targetNode.id) return;
+
+    // Ignore if targetNode is already part of completed connections (do not penalize backtrack)
+    const isAlreadyConnected = connectionsRef.current.some(
+      (c) => c.from.id === targetNode.id || c.to.id === targetNode.id
+    );
+    if (isAlreadyConnected) return;
 
     // Check if targetNode is the valid next star in sequence
     const isValid = constellationList.isValidNextStep(currentActive.id, targetNode.id);
@@ -166,11 +174,15 @@ export default function ChallengeScreen({
         }, 1200);
       }
     } else {
-      // 3. Wrong star reached
-      wrongRef.current += 1;
-      setWrongConnections(wrongRef.current);
-      playSfx('wrong');
-      console.warn(`[ASTRA] ❌ Wrong connection to ${targetNode.label || targetNode.id}! Expected next star after ${currentActive.label || currentActive.id}. Total mistakes: ${wrongRef.current}`);
+      // 3. Wrong star reached (Debounced by 500ms so brushing past doesn't spam penalties)
+      const now = Date.now();
+      if (now - lastMistakeTimeRef.current > 500) {
+        lastMistakeTimeRef.current = now;
+        wrongRef.current += 1;
+        setWrongConnections(wrongRef.current);
+        playSfx('wrong');
+        console.warn(`[ASTRA] ❌ Wrong connection to ${targetNode.label || targetNode.id}! Expected next star after ${currentActive.label || currentActive.id}. Total mistakes: ${wrongRef.current}`);
+      }
     }
   }, [constellationList, sessionId, onComplete]);
 

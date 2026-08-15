@@ -33,11 +33,28 @@ export function useWandGestures({
   const holdRef = useRef(false);
   const drawRef = useRef(false);
   const lastActionTimeRef = useRef(0);
+  const lastLostLogRef = useRef(0);
+  const lastValidPointerRef = useRef(null);
+  const lastValidTimeRef = useRef(0);
+  const velocityRef = useRef({ vx: 0, vy: 0, vz: 0 });
 
   const onResults = useCallback((results) => {
+    const now = performance.now();
+
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-      smootherRef.current.reset();
-      setPointer(null);
+      const lostElapsed = now - lastValidTimeRef.current;
+
+      // Hold stable pointer for up to 200ms during brief motion blur, then hide cleanly
+      if (lastValidPointerRef.current && lostElapsed < 200) {
+        setPointer({
+          x: lastValidPointerRef.current.x,
+          y: lastValidPointerRef.current.y,
+          z: lastValidPointerRef.current.z,
+        });
+      } else if (lostElapsed >= 200) {
+        smootherRef.current.reset();
+        setPointer(null);
+      }
       return;
     }
 
@@ -52,10 +69,21 @@ export function useWandGestures({
       x: 1 - point.x,
       y: point.y,
       z: point.z,
-    }, Date.now());
-    setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
+    }, now);
 
-    const now = Date.now();
+    // Compute velocity vector for dead-reckoning extrapolation
+    if (lastValidPointerRef.current && lastValidTimeRef.current > 0) {
+      const dt = Math.max((now - lastValidTimeRef.current) / 1000, 0.001);
+      velocityRef.current = {
+        vx: (smoothedPoint.x - lastValidPointerRef.current.x) / dt,
+        vy: (smoothedPoint.y - lastValidPointerRef.current.y) / dt,
+        vz: ((smoothedPoint.z || 0) - (lastValidPointerRef.current.z || 0)) / dt,
+      };
+    }
+
+    lastValidPointerRef.current = smoothedPoint;
+    lastValidTimeRef.current = now;
+    setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
 
     // Forward / Back Tilt (Draw Line State Machine)
     if (isForwardTilt && !holdRef.current && now - lastActionTimeRef.current > 300) {
@@ -105,28 +133,67 @@ export function useWandGestures({
 
       hands.setOptions({
         maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.5,
+        modelComplexity: 0, // 0 = Lite (ultra-fast inference, prevents frame drops during fast sweeps)
+        minDetectionConfidence: 0.15, // Ultra-low threshold catches hands even through heavy motion blur
+        minTrackingConfidence: 0.15, // Retains tracking through fast sweeps
       });
 
       hands.onResults(onResults);
       handsRef.current = hands;
 
-      // eslint-disable-next-line no-undef
-      const camera = new window.Camera(videoRef.current, {
-        onFrame: async () => {
-          if (!cancelled && videoRef.current && handsRef.current) {
-            await handsRef.current.send({ image: videoRef.current });
-          }
+      // Initialize native high-speed camera stream with 60 FPS hardware constraints
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 60, min: 30 },
+          facingMode: 'user',
         },
-        width: 1280,
-        height: 720,
       });
 
-      cameraRef.current = camera;
-      await camera.start();
-      console.log('[ASTRA] 📷 Webcam camera stream running smoothly!');
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      let isProcessing = false;
+      let animFrameId = null;
+
+      const processVideoFrame = async () => {
+        if (cancelled) return;
+
+        if (!isProcessing && videoRef.current && videoRef.current.readyState >= 2 && handsRef.current) {
+          isProcessing = true;
+          try {
+            await handsRef.current.send({ image: videoRef.current });
+          } catch (e) {
+            console.error('[ASTRA] Frame send error:', e);
+          } finally {
+            isProcessing = false;
+          }
+        }
+
+        if ('requestVideoFrameCallback' in (videoRef.current || {})) {
+          videoRef.current.requestVideoFrameCallback(processVideoFrame);
+        } else {
+          animFrameId = requestAnimationFrame(processVideoFrame);
+        }
+      };
+
+      if ('requestVideoFrameCallback' in (videoRef.current || {})) {
+        videoRef.current.requestVideoFrameCallback(processVideoFrame);
+      } else {
+        animFrameId = requestAnimationFrame(processVideoFrame);
+      }
+
+      cameraRef.current = {
+        stop: () => {
+          if (animFrameId) cancelAnimationFrame(animFrameId);
+          stream.getTracks().forEach((track) => track.stop());
+        },
+      };
+
+      console.log('[ASTRA] 📷 High-Speed Non-Blocking Video Pipeline running!');
       if (!cancelled) setIsReady(true);
     }
 
