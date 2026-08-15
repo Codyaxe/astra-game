@@ -31,16 +31,26 @@ export function useWandGestures({
   const holdRef = useRef(false);
   const drawRef = useRef(false);
   const lastActionTimeRef = useRef(0);
+  const lastDetectedTimeRef = useRef(0);
+  const lastWarnTimeRef = useRef(0);
 
   const onResults = useCallback((results) => {
     const now = performance.now();
 
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-      console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
-      smootherRef.current.reset();
-      setPointer(null);
+      if (now - lastWarnTimeRef.current > 600) {
+        lastWarnTimeRef.current = now;
+        console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
+      }
+      // If hand has been absent for more than 600ms, cleanly reset and hide cursor
+      if (lastDetectedTimeRef.current > 0 && now - lastDetectedTimeRef.current > 600) {
+        smootherRef.current.reset();
+        setPointer(null);
+      }
       return;
     }
+
+    lastDetectedTimeRef.current = now;
 
     const landmarks = results.multiHandLandmarks[0];
     const detection = detectorRef.current.update(landmarks);
