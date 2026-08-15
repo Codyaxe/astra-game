@@ -4,8 +4,9 @@
  * Implements:
  * 1. Forward / Back Tilt  (pitch angle or z-depth differential)
  * 2. Left / Right Tilt    (roll angle or rapid horizontal delta)
- * 3. Circle Motion        (angular path accumulation -> force exit)
- * 4. Shake Up / Down      (high frequency vertical reversal -> recalibration)
+ * 3. Two Fingers Up       (reset lines)
+ * 4. Circle Motion        (angular path accumulation -> force exit)
+ * 5. Shake Up / Down      (high frequency vertical reversal -> recalibration)
  */
 
 export class GestureDetector {
@@ -66,6 +67,7 @@ export class GestureDetector {
       isForwardTilt: this._detectForwardTilt(point),
       isNeutralTilt: this._detectNeutralTilt(point),
       isLeftRightTilt: this._detectLeftRightTilt(),
+      isTwoFingersUp: this._detectTwoFingersUp(landmarks),
       isCircleMotion: this._detectCircleMotion(),
       isShakeUpDown: this._detectShakeUpDown(),
     };
@@ -90,7 +92,19 @@ export class GestureDetector {
     return Math.abs(recent.roll) > 40;
   }
 
-  // ---- 3. Circle Motion (Force Emergency Exit) ----
+  // ---- 3. Two Fingers Up (Reset current lines) ----
+  _detectTwoFingersUp(landmarks) {
+    if (!landmarks || landmarks.length < 21) return false;
+
+    const indexUp = landmarks[8].y < landmarks[6].y - 0.02;
+    const middleUp = landmarks[12].y < landmarks[10].y - 0.02;
+    const ringDown = landmarks[16].y > landmarks[14].y - 0.005;
+    const pinkyDown = landmarks[20].y > landmarks[18].y - 0.005;
+
+    return indexUp && middleUp && ringDown && pinkyDown;
+  }
+
+  // ---- 4. Circle Motion (Force Emergency Exit) ----
   _detectCircleMotion() {
     if (this.history.length < 18) return false;
     // Calculate total angular sweep around centroid
@@ -120,7 +134,7 @@ export class GestureDetector {
     return Math.abs(totalAngleChange) > 5.2;
   }
 
-  // ---- 4. Shake Up / Down (Recalibrate) ----
+  // ---- 5. Shake Up / Down (Recalibrate) ----
   _detectShakeUpDown() {
     if (this.history.length < 12) return false;
     let reversals = 0;

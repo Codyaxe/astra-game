@@ -184,6 +184,52 @@ export default function ChallengeScreen({
     return snap;
   }, [pointer, constellationList]);
 
+  // Auto-advance head when cursor magnetically snaps to the valid next node.
+  useEffect(() => {
+    if (!snappedPointer?.snapped || !snappedPointer.node || !activeNode || !constellationList) return;
+
+    const targetNode = snappedPointer.node;
+    if (targetNode.id === activeNode.id) return;
+
+    const isValidNext = constellationList.isValidNextStep(activeNode.id, targetNode.id);
+    if (!isValidNext) return;
+
+    const alreadyConnected = completedConnections.some(
+      (conn) => conn.from?.id === activeNode.id && conn.to?.id === targetNode.id
+    );
+    if (alreadyConnected) return;
+
+    playSfx('correct');
+    const newConn = { from: activeNode, to: targetNode };
+    const updatedConns = [...completedConnections, newConn];
+    setCompletedConnections(updatedConns);
+    setActiveNode(targetNode);
+
+    if (updatedConns.length >= constellationList.getTotalRequiredConnections()) {
+      const elapsed = Date.now() - startTimeRef.current;
+      submitAttempt(sessionId, {
+        time_elapsed_ms: elapsed,
+        wrong_connections: wrongConnections,
+        total_clicks: totalClicks,
+        wand_travel_dist: wandTravelDistRef.current,
+        recalibration_count: recalibrationCount,
+        completed_status: 1, // Completed
+      })
+        .then((res) => onComplete?.(res))
+        .catch(() => onComplete?.({ completed_status: 1, score: 80 }));
+    }
+  }, [
+    snappedPointer,
+    activeNode,
+    constellationList,
+    completedConnections,
+    sessionId,
+    wrongConnections,
+    totalClicks,
+    recalibrationCount,
+    onComplete,
+  ]);
+
   // Accumulate wand distance
   useEffect(() => {
     if (pointer && prevPointerRef.current) {

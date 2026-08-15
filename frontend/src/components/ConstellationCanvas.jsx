@@ -7,12 +7,12 @@
  * - Wand cursor & magnetic snap visualizer
  */
 
-import { useRef, useEffect, useCallback } from 'react';
+import { memo, useRef, useEffect, useCallback } from 'react';
 
 const STAR_VISUAL_RADIUS = 12;
 const FAKE_STAR_RADIUS = 8;
 
-export default function ConstellationCanvas({
+function ConstellationCanvas({
   starNodes = [],
   fakeNodes = [],
   completedConnections = [], // Array of { from: StarNode, to: StarNode }
@@ -139,3 +139,30 @@ export default function ConstellationCanvas({
     />
   );
 }
+
+function arePointersEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    Math.abs(a.x - b.x) < 0.0005 &&
+    Math.abs(a.y - b.y) < 0.0005 &&
+    Math.abs((a.z || 0) - (b.z || 0)) < 0.0005 &&
+    Boolean(a.snapped) === Boolean(b.snapped)
+  );
+}
+
+function arePropsEqual(prev, next) {
+  return (
+    prev.starNodes === next.starNodes &&
+    prev.fakeNodes === next.fakeNodes &&
+    prev.completedConnections === next.completedConnections &&
+    prev.activeNode === next.activeNode &&
+    prev.onDraw === next.onDraw &&
+    prev.width === next.width &&
+    prev.height === next.height &&
+    arePointersEqual(prev.wandPointer, next.wandPointer) &&
+    arePointersEqual(prev.snappedPointer, next.snappedPointer)
+  );
+}
+
+export default memo(ConstellationCanvas, arePropsEqual);

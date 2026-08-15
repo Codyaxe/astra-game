@@ -4,7 +4,7 @@
  * State Machine:
  * - Tilt Forward -> ON_HOLD = true -> ON_DRAW = true (actively draws line toward wand)
  * - Untilt (Neutral) -> ON_DRAW = false, ON_HOLD = false -> registers completed "click"
- * - Left/Right Tilt -> fires onResetLines()
+ * - Raise 2 Fingers -> fires onResetLines()
  * - Circle Motion -> fires onForceExit()
  * - Up/Down Shake -> triggers wand recalibration
  */
@@ -53,8 +53,9 @@ export function useWandGestures({
     const detection = detectorRef.current.update(landmarks);
     if (!detection) return;
 
-    const { point, isForwardTilt, isNeutralTilt, isLeftRightTilt, isCircleMotion, isShakeUpDown } = detection;
-    setPointer({ x: point.x, y: point.y, z: point.z });
+    const { point, isForwardTilt, isNeutralTilt, isTwoFingersUp, isCircleMotion, isShakeUpDown } = detection;
+    // Convert camera-space X to screen-space X.
+    setPointer({ x: 1 - point.x, y: point.y, z: point.z });
 
     const now = Date.now();
 
@@ -67,16 +68,16 @@ export function useWandGestures({
 
     // 2. Circle Motion -> Force Exit
     if (isCircleMotion && now - lastActionTimeRef.current > 2000) {
-      lastActionTimeRef.current = now;
-      setGestureStatus('Circle Gesture: Force Exit!');
-      onForceExit?.();
-      return;
+      // lastActionTimeRef.current = now;
+      // setGestureStatus('Circle Gesture: Force Exit!');
+      // onForceExit?.();
+      // return;
     }
 
-    // 3. Left / Right Tilt -> Reset current lines
-    if (isLeftRightTilt && now - lastActionTimeRef.current > 1200) {
+    // 3. Raise 2 Fingers -> Reset current lines
+    if (isTwoFingersUp && now - lastActionTimeRef.current > 1200) {
       lastActionTimeRef.current = now;
-      setGestureStatus('Tilt Reset ↺');
+      setGestureStatus('Two-Finger Reset ↺');
       onResetLines?.();
       setTimeout(() => setGestureStatus('Neutral'), 1000);
       return;
