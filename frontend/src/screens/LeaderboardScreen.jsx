@@ -61,11 +61,11 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
   const query = searchQuery.trim().toLowerCase();
   const filteredRest = query
     ? rest.filter((row) => {
-        const name = `${row.first_name} ${row.last_name}`.toLowerCase();
-        const sr = (row.sr_code || '').toLowerCase();
-        const course = (row.course || '').toLowerCase();
-        return name.includes(query) || sr.includes(query) || course.includes(query);
-      })
+      const name = `${row.first_name} ${row.last_name}`.toLowerCase();
+      const sr = (row.sr_code || '').toLowerCase();
+      const course = (row.course || '').toLowerCase();
+      return name.includes(query) || sr.includes(query) || course.includes(query);
+    })
     : rest;
 
   // Pagination
@@ -81,8 +81,8 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
 
   const attemptFillClass =
     attemptsRemaining === 0 ? 'lb-attempts-fill--full' :
-    attemptsRemaining === 1 ? 'lb-attempts-fill--warn' :
-    'lb-attempts-fill--ok';
+      attemptsRemaining === 1 ? 'lb-attempts-fill--warn' :
+        'lb-attempts-fill--ok';
 
   return (
     <div className="screen screen--leaderboard">
@@ -219,7 +219,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
             ) : (
               <>
                 {query && (
-                  <div className="lb-search-count" style={{ padding: '0.5rem 1rem 0' }}>
+                  <div className="lb-search-count" style={{ padding: '0.5rem 1rem 5px' }}>
                     {filteredRest.length} of {rest.length} players matching "{searchQuery}"
                   </div>
                 )}
