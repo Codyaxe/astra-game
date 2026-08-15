@@ -69,6 +69,20 @@ export class MotionSmoother {
     }
 
     const dt = Math.max((timestamp - this.lastTime) / 1000.0, 0.001);
+    
+    // Stale Frame Protection: If > 80ms elapsed since last detection (hand was lost),
+    // do NOT calculate velocity against stale data. Cleanly re-anchor at current position.
+    if (dt > 0.08) {
+      this.reset();
+      this.lastTime = timestamp;
+      this.prevRaw = { ...rawPoint };
+      return {
+        x: this.xFilter.filter(rawPoint.x, 1.0),
+        y: this.yFilter.filter(rawPoint.y, 1.0),
+        z: this.zFilter.filter(rawPoint.z || 0, 1.0),
+      };
+    }
+
     const fps = Math.round(1.0 / dt);
     this.lastTime = timestamp;
 
