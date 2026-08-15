@@ -47,8 +47,12 @@ export function useWandGestures({
 
     const { point, isForwardTilt, isNeutralTilt } = detection;
 
-    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter
-    const smoothedPoint = smootherRef.current.smooth(point, Date.now());
+    // Apply 1€ Dynamic Velocity-Adaptive Smoothing filter (mirror X for natural mirror movement)
+    const smoothedPoint = smootherRef.current.smooth({
+      x: 1 - point.x,
+      y: point.y,
+      z: point.z,
+    }, Date.now());
     setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
 
     const now = Date.now();
