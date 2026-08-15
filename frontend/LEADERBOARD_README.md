@@ -62,7 +62,7 @@ This will insert 30 players with scores ranging from 15–98 into the `players` 
 
 ### How to remove it
 
-Your teammates can clean up test data with these SQL queries:
+You can clean up test data with these SQL queries:
 
 ```sql
 -- Remove test leaderboard entries
