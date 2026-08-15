@@ -33,6 +33,9 @@ export function useWandGestures({
   const lastActionTimeRef = useRef(0);
   const lastDetectedTimeRef = useRef(0);
   const lastWarnTimeRef = useRef(0);
+  const lastValidPointerRef = useRef(null);
+  const lastValidTimeRef = useRef(0);
+  const velocityRef = useRef({ vx: 0, vy: 0 });
 
   const onResults = useCallback((results) => {
     const now = performance.now();
@@ -42,8 +45,16 @@ export function useWandGestures({
         lastWarnTimeRef.current = now;
         console.warn('[TRACKING] ⚠️ No hand detected by MediaPipe (out of frame or motion blur)');
       }
-      // If hand absent > 600ms, hide cursor cleanly
-      if (lastDetectedTimeRef.current > 0 && now - lastDetectedTimeRef.current > 600) {
+
+      const lostElapsed = now - lastValidTimeRef.current;
+      // Inertial Dead-Reckoning: glide cursor along momentum vector for up to 250ms during motion blur
+      if (lastValidPointerRef.current && lostElapsed < 250) {
+        const decay = Math.max(0, 1.0 - lostElapsed / 250);
+        const dt = lostElapsed / 1000;
+        const extraX = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.x + velocityRef.current.vx * dt * decay * 0.4));
+        const extraY = Math.min(0.98, Math.max(0.02, lastValidPointerRef.current.y + velocityRef.current.vy * dt * decay * 0.4));
+        setPointer({ x: extraX, y: extraY, z: lastValidPointerRef.current.z || 0 });
+      } else if (lostElapsed >= 600) {
         smootherRef.current.reset();
         setPointer(null);
       }
@@ -65,6 +76,17 @@ export function useWandGestures({
     }, now);
 
     if (smoothedPoint) {
+      // Calculate velocity vector for dead-reckoning extrapolation
+      if (lastValidPointerRef.current && lastValidTimeRef.current > 0) {
+        const dt = Math.max((now - lastValidTimeRef.current) / 1000, 0.001);
+        velocityRef.current = {
+          vx: (smoothedPoint.x - lastValidPointerRef.current.x) / dt,
+          vy: (smoothedPoint.y - lastValidPointerRef.current.y) / dt,
+        };
+      }
+
+      lastValidPointerRef.current = smoothedPoint;
+      lastValidTimeRef.current = now;
       setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
     }
 

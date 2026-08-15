@@ -1,16 +1,44 @@
 /**
- * motionSmoothing.js — Dynamic Velocity-Adaptive Pointer Smoothing (One-Euro Filter)
- *
- * Eliminates camera tracking jitter:
- * - At low speeds / holding still: High smoothing (eliminates tremor & sensor noise).
- * - At high speeds / sweeping: Low smoothing (zero latency & instant responsiveness).
+ * motionSmoothing.js — One-Euro (€1) Adaptive Filter with Smooth Gap Recovery
+ * 
+ * Features:
+ * 1. Still / Low Speed: Heavy smoothing (zero tremor/jitter).
+ * 2. High Speed: Alpha -> 1.0 (zero lag, 1:1 instantaneous response).
+ * 3. Gap Recovery: When tracking resumes after motion blur, smoothly glides 
+ *    from previous position to new position instead of teleporting.
  */
 
+class LowPassFilter {
+  constructor() {
+    this.s = null;
+    this.lastRaw = null;
+  }
+
+  reset() {
+    this.s = null;
+    this.lastRaw = null;
+  }
+
+  filter(value, alpha = 1.0) {
+    this.lastRaw = value;
+    if (this.s === null) {
+      this.s = value;
+      return value;
+    }
+    this.s = alpha * value + (1.0 - alpha) * this.s;
+    return this.s;
+  }
+
+  get lastFiltered() {
+    return this.s;
+  }
+}
+
 export class MotionSmoother {
-  constructor(minCutoff = 1.0, beta = 0.007, dCutoff = 1.0) {
-    this.minCutoff = minCutoff; // Minimum cutoff frequency (lower = smoother when still)
-    this.beta = beta;           // Velocity coefficient (higher = faster response when moving)
-    this.dCutoff = dCutoff;     // Derivative cutoff frequency
+  constructor(minCutoff = 1.2, beta = 0.05, dCutoff = 1.0) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
 
     this.xFilter = new LowPassFilter();
     this.yFilter = new LowPassFilter();
@@ -21,6 +49,9 @@ export class MotionSmoother {
     this.dzFilter = new LowPassFilter();
 
     this.lastTime = null;
+    this.prevRaw = null;
+    this.recovering = false;
+    this.recoverFrames = 0;
   }
 
   reset() {
@@ -31,13 +62,18 @@ export class MotionSmoother {
     this.dyFilter.reset();
     this.dzFilter.reset();
     this.lastTime = null;
+    this.prevRaw = null;
+    this.recovering = false;
+    this.recoverFrames = 0;
   }
 
-  smooth(rawPoint, timestamp = Date.now()) {
+  smooth(rawPoint, timestamp = performance.now()) {
     if (!rawPoint) return null;
 
-    if (this.lastTime === null) {
+    // First frame initialization
+    if (this.lastTime === null || this.prevRaw === null) {
       this.lastTime = timestamp;
+      this.prevRaw = { ...rawPoint };
       return {
         x: this.xFilter.filter(rawPoint.x, 1.0),
         y: this.yFilter.filter(rawPoint.y, 1.0),
@@ -48,54 +84,71 @@ export class MotionSmoother {
     const dt = Math.max((timestamp - this.lastTime) / 1000.0, 0.001);
     this.lastTime = timestamp;
 
-    // 1. Calculate rate of change (velocity derivative)
-    const dx = (rawPoint.x - (this.xFilter.lastRaw || rawPoint.x)) / dt;
-    const dy = (rawPoint.y - (this.yFilter.lastRaw || rawPoint.y)) / dt;
-    const dz = ((rawPoint.z || 0) - (this.zFilter.lastRaw || 0)) / dt;
+    // GAP RECOVERY: If hand was lost during fast sweep (gap > 80ms)
+    // Don't teleport! Smoothly glide toward the new re-detected position.
+    if (dt > 0.08) {
+      this.dxFilter.reset();
+      this.dyFilter.reset();
+      this.dzFilter.reset();
+      this.prevRaw = { ...rawPoint };
 
+      this.recovering = true;
+      this.recoverFrames = 0;
+
+      const recoveryAlpha = 0.18;
+      const fps = Math.round(1.0 / dt);
+      console.log(
+        `[TRACKING] 🔄 GAP RECOVERY | FPS: ${fps} | Gliding to (${rawPoint.x.toFixed(2)}, ${rawPoint.y.toFixed(2)}) | alpha: ${recoveryAlpha}`
+      );
+
+      return {
+        x: this.xFilter.filter(rawPoint.x, recoveryAlpha),
+        y: this.yFilter.filter(rawPoint.y, recoveryAlpha),
+        z: this.zFilter.filter(rawPoint.z || 0, recoveryAlpha),
+      };
+    }
+
+    // During recovery: ramp alpha up smoothly over ~8 frames (0.18 -> 0.23 -> ... -> normal)
+    let alphaOverride = null;
+    if (this.recovering) {
+      this.recoverFrames++;
+      if (this.recoverFrames >= 8) {
+        this.recovering = false;
+      } else {
+        alphaOverride = 0.18 + (this.recoverFrames * 0.06);
+      }
+    }
+
+    // 1. Calculate rate of change (derivative)
+    const dx = (rawPoint.x - this.prevRaw.x) / dt;
+    const dy = (rawPoint.y - this.prevRaw.y) / dt;
+    const dz = ((rawPoint.z || 0) - (this.prevRaw.z || 0)) / dt;
+    this.prevRaw = { ...rawPoint };
+
+    // 2. Filter the derivative
     const edx = this.dxFilter.filter(dx, this._alpha(dt, this.dCutoff));
     const edy = this.dyFilter.filter(dy, this._alpha(dt, this.dCutoff));
     const edz = this.dzFilter.filter(dz, this._alpha(dt, this.dCutoff));
 
     const speed = Math.sqrt(edx * edx + edy * edy + edz * edz);
 
-    // 2. Adaptive cutoff: increase frequency as speed increases
+    // 3. Dynamic cutoff frequency based on speed
     const cutoff = this.minCutoff + this.beta * speed;
-    const alpha = this._alpha(dt, cutoff);
+    const normalAlpha = this._alpha(dt, cutoff);
+    const alpha = alphaOverride !== null ? Math.min(alphaOverride, normalAlpha) : normalAlpha;
 
-    // 3. Filter coordinates
-    const sx = this.xFilter.filter(rawPoint.x, alpha);
-    const sy = this.yFilter.filter(rawPoint.y, alpha);
-    const sz = this.zFilter.filter(rawPoint.z || 0, alpha);
+    // Fast-bypass: If sweeping fast, track directly with zero lag
+    const effectiveAlpha = (speed > 1.4 && !this.recovering) ? 1.0 : alpha;
 
-    return { x: sx, y: sy, z: sz };
+    return {
+      x: this.xFilter.filter(rawPoint.x, effectiveAlpha),
+      y: this.yFilter.filter(rawPoint.y, effectiveAlpha),
+      z: this.zFilter.filter(rawPoint.z || 0, effectiveAlpha),
+    };
   }
 
   _alpha(dt, cutoff) {
     const tau = 1.0 / (2 * Math.PI * cutoff);
     return 1.0 / (1.0 + tau / dt);
-  }
-}
-
-class LowPassFilter {
-  constructor() {
-    this.lastFiltered = null;
-    this.lastRaw = null;
-  }
-
-  reset() {
-    this.lastFiltered = null;
-    this.lastRaw = null;
-  }
-
-  filter(value, alpha) {
-    this.lastRaw = value;
-    if (this.lastFiltered === null) {
-      this.lastFiltered = value;
-      return value;
-    }
-    const filtered = alpha * value + (1.0 - alpha) * this.lastFiltered;
-    this.lastFiltered = filtered;
-    return filtered;
   }
 }
