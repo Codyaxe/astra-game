@@ -903,6 +903,40 @@ export default function ChallengeScreen({
         />
       )}
 
+      {/* Holographic Backtracking Prompt Banner (When Mistake is Present) */}
+      {winFlybyProgress === null && completedConnections.some((c) => c.isWrong) && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '84px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(15, 23, 42, 0.92)',
+            border: '1.5px solid #EF4444',
+            boxShadow: '0 0 25px rgba(239, 68, 68, 0.6), inset 0 0 12px rgba(239, 68, 68, 0.3)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: '30px',
+            padding: '10px 24px',
+            color: '#FEE2E2',
+            fontSize: '13px',
+            fontWeight: 800,
+            letterSpacing: '0.8px',
+            textTransform: 'uppercase',
+            animation: 'undoPillPulse 1.6s ease-in-out infinite',
+            pointerEvents: 'none',
+          }}
+        >
+          <span>
+            <strong style={{ color: '#FCA5A5', marginRight: '6px' }}>MISTAKE DETECTED:</strong>
+            Trace backwards along the red line to undo
+          </span>
+        </div>
+      )}
+
       {/* Prominent Center-Bottom Action Button during Briefing */}
       {isBriefingActive && (
         <div

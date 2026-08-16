@@ -154,6 +154,17 @@ export default function ConstellationLayer({
           <stop offset="50%" stopColor="#EF4444" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
         </radialGradient>
+
+        <style>{`
+          @keyframes reverseDashFlow {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 32; }
+          }
+          @keyframes undoPillPulse {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6)); }
+            50% { transform: scale(1.06); filter: drop-shadow(0 0 16px rgba(239, 68, 68, 1)); }
+          }
+        `}</style>
       </defs>
 
       {/* 0. Semi-Transparent Blue Guide Lines for Target Valid Connections (Easy Mode Only) */}
@@ -184,6 +195,8 @@ export default function ConstellationLayer({
         if (!fromStar || !toStar) return null;
 
         const isWrong = Boolean(segment.isWrong);
+        const midX = (fromStar.x + toStar.x) / 2;
+        const midY = (fromStar.y + toStar.y) / 2;
 
         return (
           <g key={`conn-${idx}`}>
@@ -194,11 +207,12 @@ export default function ConstellationLayer({
               x2={toStar.x}
               y2={toStar.y}
               stroke={isWrong ? "#EF4444" : "#F4D58D"}
-              strokeWidth="6"
-              strokeOpacity="0.75"
+              strokeWidth={isWrong ? "7" : "6"}
+              strokeOpacity="0.8"
               filter={isWrong ? "url(#silver-glow)" : "url(#gold-glow)"}
-              strokeDasharray={isWrong ? "8 4" : "none"}
+              strokeDasharray={isWrong ? "10 6" : "none"}
               strokeLinecap="round"
+              style={isWrong ? { animation: 'reverseDashFlow 1s linear infinite' } : {}}
             />
             {/* Core Bright Line */}
             <line
@@ -210,6 +224,46 @@ export default function ConstellationLayer({
               strokeWidth="2.5"
               strokeLinecap="round"
             />
+
+            {/* Backtrack / Undo Visual Indicator Pill on Erroneous Line */}
+            {isWrong && (
+              <g
+                transform={`translate(${midX}, ${midY})`}
+                style={{
+                  animation: 'undoPillPulse 1.8s ease-in-out infinite',
+                }}
+              >
+                {/* Pill Glow Background */}
+                <rect
+                  x="-75"
+                  y="-14"
+                  width="150"
+                  height="28"
+                  rx="14"
+                  fill="rgba(15, 23, 42, 0.9)"
+                  stroke="#EF4444"
+                  strokeWidth="1.5"
+                />
+                {/* Backtrack Icon + Label */}
+                <text
+                  x="0"
+                  y="4"
+                  fill="#FEE2E2"
+                  fontSize="11"
+                  fontWeight="900"
+                  textAnchor="middle"
+                  letterSpacing="0.8px"
+                  style={{
+                    textShadow: '0 0 8px rgba(239, 68, 68, 0.8)',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                  }}
+                >
+                  RETRACE TO UNDO
+                </text>
+              </g>
+            )}
           </g>
         );
       })}
@@ -318,6 +372,7 @@ export default function ConstellationLayer({
       {showTutorialGuide && (
         <TutorialTracingGuide
           starNodes={stars.filter((s) => s.id !== undefined && s.id < 100)}
+          fakeNodes={stars.filter((s) => s.id !== undefined && (s.id >= 100 || s.isFake || s.fake))}
           toPx={toPx}
           width={width}
           height={height}
