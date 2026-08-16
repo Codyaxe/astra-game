@@ -29,13 +29,13 @@ export default function SubtitleOverlay({ subtitle = null }) {
         userSelect: 'none',
         display: 'flex',
         justifyContent: 'center',
-        animation: 'subtitleFadeIn 0.25s ease-out forwards',
+        animation: 'subtitleFadeToVisible 0.8s ease-in-out forwards',
       }}
     >
       <style>{`
-        @keyframes subtitleFadeIn {
-          from { opacity: 0; transform: translate(-50%, 12px); }
-          to { opacity: 1; transform: translate(-50%, 0); }
+        @keyframes subtitleFadeToVisible {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
         }
       `}</style>
 

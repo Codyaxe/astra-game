@@ -1068,6 +1068,29 @@ export default function Dashboard({
                       <td style={{ padding: "12px", textAlign: "right" }}>
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                           <button
+                            onClick={() => {
+                              if (onLaunchChallenge) {
+                                onLaunchChallenge(0, r);
+                              }
+                            }}
+                            title="Play Now (Launch Challenge Directly)"
+                            className="action-btn"
+                            style={{
+                              background: "rgba(74,222,128,0.18)",
+                              border: "1px solid rgba(74,222,128,0.4)",
+                              color: colors.success,
+                              borderRadius: 8,
+                              padding: "6px 10px",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                              fontSize: 11,
+                              fontWeight: 800,
+                            }}
+                          >
+                            <Play size={13} fill={colors.success} /> PLAY
+                          </button>
+                          <button
                             onClick={() => setActiveTicket(r)}
                             title="View QR Ticket"
                             className="action-btn"

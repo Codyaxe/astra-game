@@ -755,8 +755,8 @@ export default function ChallengeScreen({
     winFlybyProgress !== null || hasEndedRef.current
       ? []
       : controlMode === 'mouse'
-      ? mouseDrawingPath
-      : (wandDrawingPath.length > 0 ? wandDrawingPath : mouseDrawingPath);
+        ? mouseDrawingPath
+        : (wandDrawingPath.length > 0 ? wandDrawingPath : mouseDrawingPath);
 
   const isTracing =
     winFlybyProgress === null &&
@@ -768,10 +768,10 @@ export default function ChallengeScreen({
     controlMode === 'mouse'
       ? (winFlybyProgress !== null || hasEndedRef.current ? { ...mouseWand, isDrawing: false } : mouseWand)
       : {
-          x: snappedPointer?.x ?? pointer?.x ?? 0.5,
-          y: snappedPointer?.y ?? pointer?.y ?? 0.5,
-          isDrawing: isTracing,
-        };
+        x: snappedPointer?.x ?? pointer?.x ?? 0.5,
+        y: snappedPointer?.y ?? pointer?.y ?? 0.5,
+        isDrawing: isTracing,
+      };
 
   return (
     <div className="screen screen--challenge">
@@ -835,45 +835,64 @@ export default function ChallengeScreen({
         />
       )}
 
-      {/* Bottom-Right Skip Briefing Action Button (Clean, Non-Obtrusive, Cinematic) */}
+      {/* Prominent Center-Bottom Action Button during Briefing */}
       {isBriefingActive && (
         <div
           style={{
             position: 'fixed',
-            bottom: 24,
-            right: 28,
+            bottom: '100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            animation: 'fadeIn 0.4s ease-out',
+            justifyContent: 'center',
+            animation: 'fadeToVisible 1.2s ease-in-out forwards',
           }}
         >
           <button
             onClick={handleSkipBriefing}
             style={{
-              background: 'linear-gradient(135deg, rgba(244, 213, 141, 0.95) 0%, rgba(224, 169, 59, 0.95) 100%)',
-              color: '#0a0e1a',
-              border: '1px solid rgba(244, 213, 141, 0.8)',
-              borderRadius: '14px',
-              padding: '12px 26px',
-              fontSize: '14px',
-              fontWeight: 800,
-              letterSpacing: '1px',
+              background: 'linear-gradient(135deg, #f4d58d 0%, #e0a93b 100%)',
+              color: '#080c18',
+              border: '2px solid #ffffff',
+              borderRadius: '24px',
+              padding: '16px 42px',
+              fontSize: '17px',
+              fontWeight: 900,
+              marginBottom: '8rem',
+              letterSpacing: '2px',
               cursor: 'pointer',
-              boxShadow: '0 4px 25px rgba(0, 0, 0, 0.7), 0 0 25px rgba(244, 213, 141, 0.5)',
+              boxShadow: '0 8px 35px rgba(0, 0, 0, 0.8), 0 0 35px rgba(244, 213, 141, 0.85)',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
-              transition: 'all 0.2s ease',
+              gap: '12px',
+              transition: 'transform 0.25s ease, box-shadow 0.25s ease',
               fontFamily: "'Outfit', sans-serif",
+              animation: 'pulseGlowBtn 2.5s ease-in-out infinite',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.08)';
+              e.currentTarget.style.boxShadow = '0 12px 45px rgba(0, 0, 0, 0.9), 0 0 50px rgba(244, 213, 141, 1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 8px 35px rgba(0, 0, 0, 0.8), 0 0 35px rgba(244, 213, 141, 0.85)';
+            }}
           >
-            <span>START TRACING</span>
-            <span style={{ fontSize: 16 }}>⮞</span>
+            <span>SKIP GUIDE TRACING</span>
+            <span style={{ fontSize: 20 }}>⮞</span>
           </button>
+          <style>{`
+            @keyframes pulseGlowBtn {
+              0%, 100% { box-shadow: 0 8px 35px rgba(0,0,0,0.8), 0 0 25px rgba(244, 213, 141, 0.7); }
+              50% { box-shadow: 0 8px 45px rgba(0,0,0,0.9), 0 0 45px rgba(244, 213, 141, 1); }
+            }
+            @keyframes fadeToVisible {
+              0% { opacity: 0; }
+              100% { opacity: 1; }
+            }
+          `}</style>
         </div>
       )}
 

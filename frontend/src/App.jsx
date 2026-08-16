@@ -119,7 +119,7 @@ export default function App() {
     setSessionStageScores([]);
     generateSessionPlaylist();
     setConstellationIndex(0);
-    setScreen('challenge');
+    setScreen('loading');
   }, [generateSessionPlaylist]);
 
   const handleQuickPlay = useCallback(() => {
@@ -138,7 +138,7 @@ export default function App() {
     setSessionStageScores([]);
     generateSessionPlaylist();
     setConstellationIndex(0);
-    setScreen('challenge');
+    setScreen('loading');
   }, [generateSessionPlaylist]);
 
   const [isStageWarping, setIsStageWarping] = useState(false);
@@ -302,8 +302,8 @@ export default function App() {
           constellations={constellations}
           gameSettings={gameSettings}
           onUpdateSettings={handleUpdateSettings}
-          onLaunchChallenge={(stageIdx = 0) => {
-            const adminPlayer = {
+          onLaunchChallenge={(stageIdx = 0, customPlayer = null) => {
+            const playerToLaunch = customPlayer || {
               id: 9999,
               first_name: 'Admin',
               last_name: 'Tester',
@@ -313,8 +313,10 @@ export default function App() {
               total_attempts_used: 0,
               best_score: 0,
             };
-            setPlayer(adminPlayer);
-            setAttemptNumber(1);
+            setPlayer(playerToLaunch);
+            const rem = customPlayer?.attempts_used !== undefined ? Math.max(0, 3 - customPlayer.attempts_used) : 3;
+            setAttemptNumber(Math.max(1, 4 - rem));
+            setSessionStageScores([]);
             generateSessionPlaylist();
             setConstellationIndex(stageIdx);
             setScreen('challenge');
@@ -323,7 +325,13 @@ export default function App() {
       )}
 
       {screen === 'loading' && (
-        <LoadingScreen message="Loading constellation challenge..." />
+        <LoadingScreen
+          player={player}
+          constellationName={currentConstellation?.name || 'ARIES (TUTORIAL)'}
+          message="WARPING TO CELESTIAL COORDINATES…"
+          duration={2200}
+          onComplete={() => setScreen('challenge')}
+        />
       )}
 
       {screen === 'autostart_ready' && (

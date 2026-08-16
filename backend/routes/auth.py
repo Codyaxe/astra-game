@@ -55,7 +55,7 @@ def _create_or_fetch_existing(first_name, last_name, sr_code, course, contact, s
             section=section
         )
         return get_player_by_id(player_id), True
-    except IntegrityError:
+    except Exception:
         existing = get_player_by_sr_code(sr_code)
         if existing:
             # Dynamically update details if any are empty
@@ -69,9 +69,6 @@ def _create_or_fetch_existing(first_name, last_name, sr_code, course, contact, s
                 execute(f"UPDATE players SET {set_clause} WHERE id = %s", tuple(params), commit=True)
                 existing = get_player_by_id(existing["id"])
             return existing, False
-        # Extremely unlikely: constraint fired on qr_ticket_code collision,
-        # not sr_code. Re-raise so it surfaces as a 500 instead of a
-        # silent None being returned to the caller.
         raise
  
  

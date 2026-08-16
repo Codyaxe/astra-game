@@ -95,3 +95,7 @@ npm run preview
 | **Left / Right Tilt** | Rapid roll/tilt sideways | Clears all current lines (Reset attempt) |
 | **Circle Motion** | Full 360° circular sweep | Emergency Force Exit to Leaderboard |
 | **Up / Down Shake** | Rapid up-and-down shaking | Recalibrates wand baseline tracking |
+
+## Security
+
+Please **change** the Flask Secret Key when online deployment is considered.

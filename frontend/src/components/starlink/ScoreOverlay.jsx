@@ -33,10 +33,10 @@ export default function ScoreOverlay({
   const wrongAttempts = telemetry?.wrong_attempts !== undefined ? telemetry.wrong_attempts : 8;
   const travelDistCm = telemetry?.travel_dist_cm !== undefined ? telemetry.travel_dist_cm : 30.2;
 
-  // Primary Theme Color: Cockpit Celestial Gold for Win (#F4D58D), Crimson Red for Fail (#E5484D)
-  const themeColor = isWin ? '#F4D58D' : '#E5484D';
-  const glowColor = isWin ? 'rgba(244, 213, 141, 0.75)' : 'rgba(229, 72, 77, 0.75)';
-  const bgGlowColor = isWin ? 'rgba(244, 213, 141, 0.18)' : 'rgba(229, 72, 77, 0.18)';
+  // Primary Theme Color: Elegant Soft Celestial Gold for Win (#E2C98A), Softer Coral Rose for Fail (#F87171)
+  const themeColor = isWin ? '#E2C98A' : '#F87171';
+  const glowColor = isWin ? 'rgba(226, 201, 138, 0.45)' : 'rgba(248, 113, 113, 0.45)';
+  const bgGlowColor = isWin ? 'rgba(226, 201, 138, 0.10)' : 'rgba(248, 113, 113, 0.10)';
 
   return (
     <div
@@ -221,13 +221,13 @@ export default function ScoreOverlay({
             </div>
           </div>
 
-          {/* Errors Stat */}
+          {/* Completion Stat */}
           <div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#FF3B30', textShadow: '0 0 10px #FF3B30' }}>
-              {wrongAttempts}
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38BDF8', textShadow: '0 0 10px #38BDF8' }}>
+              {isWin ? '100%' : 'PARTIAL'}
             </div>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255, 248, 231, 0.8)', letterSpacing: '1px', marginTop: '2px' }}>
-              ERRORS
+              STATUS
             </div>
           </div>
 

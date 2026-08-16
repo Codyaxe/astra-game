@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Check,
   Database,
+  Play,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,11 @@ function Starfield() {
 const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
 const GAME_URL = import.meta.env.VITE_GAME_URL || `${window.location.protocol}//${window.location.hostname}:5173`;
 
-export default function RegisterForm({ onOpenScanner = () => { }, onOpenDashboard = () => { } }) {
+export default function RegisterForm({
+  onOpenScanner = () => { },
+  onOpenDashboard = () => { },
+  onStartGame = null,
+}) {
   const [photo, setPhoto] = useState(null);
   const [form, setForm] = useState({
     firstName: "",
@@ -611,10 +616,78 @@ export default function RegisterForm({ onOpenScanner = () => { }, onOpenDashboar
             />
           </Field>
 
-          <button type="submit" className="reg-submit" style={styles.submitBtn}>
-            <span>REGISTER NOW</span>
-            <Sparkle size={16} color="#ffffff" fill="#ffffff" />
-          </button>
+          <div style={{ display: "flex", gap: 10, marginTop: 4, width: "100%" }}>
+            <button
+              type="submit"
+              className="reg-submit"
+              style={{
+                ...styles.submitBtn,
+                flex: 1,
+                marginTop: 0,
+              }}
+            >
+              <span>REGISTER</span>
+              <Sparkle size={16} color="#ffffff" fill="#ffffff" />
+            </button>
+
+            {onStartGame && (
+              <button
+                type="button"
+                className="reg-submit"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!form.srCode || !form.firstName || !form.lastName || !form.course) {
+                    alert("Please fill in SR-Code, First Name, Last Name, and Course before playing.");
+                    return;
+                  }
+                  setSubmitting(true);
+                  try {
+                    const res = await fetch(`${BACKEND_URL}/register`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(form),
+                    });
+                    const responseData = await res.json().catch(() => ({}));
+                    const playerObj = responseData.player || {
+                      first_name: form.firstName,
+                      last_name: form.lastName,
+                      sr_code: form.srCode,
+                      course: form.course,
+                      department: form.dept || "CICS",
+                      total_attempts_used: 0,
+                      best_score: 0,
+                    };
+                    const rem = responseData.attempts_remaining !== undefined ? responseData.attempts_remaining : 3;
+                    onStartGame(playerObj, rem);
+                  } catch (err) {
+                    // Fallback to offline start if backend has network glitch
+                    onStartGame({
+                      first_name: form.firstName,
+                      last_name: form.lastName,
+                      sr_code: form.srCode,
+                      course: form.course,
+                      department: form.dept || "CICS",
+                      total_attempts_used: 0,
+                      best_score: 0,
+                    }, 3);
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                style={{
+                  ...styles.submitBtn,
+                  flex: 1,
+                  marginTop: 0,
+                  border: "1px solid rgba(74, 222, 128, 0.45)",
+                  background: "linear-gradient(135deg, #15803d 0%, #166534 100%)",
+                  boxShadow: "0 8px 24px rgba(74, 222, 128, 0.35)",
+                }}
+              >
+                <span>PLAY NOW</span>
+                <Play size={15} fill="#ffffff" color="#ffffff" />
+              </button>
+            )}
+          </div>
         </form>
 
         {/* Footer Link matching mockup */}
@@ -838,53 +911,88 @@ export default function RegisterForm({ onOpenScanner = () => { }, onOpenDashboar
             </div>
 
             {/* Action buttons */}
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                type="button"
-                onClick={refreshTicketStatus}
-                style={{
-                  flex: 1,
-                  height: 42,
-                  borderRadius: 14,
-                  border: `1px solid rgba(255,255,255,0.1)`,
-                  background: "rgba(15,23,42,0.6)",
-                  color: colors.text,
-                  fontFamily: "inherit",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                <RefreshCw size={13} /> REFRESH
-              </button>
-              <button
-                type="button"
-                style={{
-                  flex: 1.5,
-                  height: 42,
-                  borderRadius: 14,
-                  border: `1px solid rgba(168,85,247,0.4)`,
-                  background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
-                  boxShadow: `0 6px 18px ${colors.accentGlow}`,
-                  color: colors.text,
-                  fontFamily: "inherit",
-                  fontWeight: 800,
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-                onClick={() => setTicketData(null)}
-              >
-                DONE <Sparkle size={13} color="#fff" fill="#fff" />
-              </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {onStartGame && (
+                <button
+                  type="button"
+                  style={{
+                    width: "100%",
+                    height: 48,
+                    borderRadius: 16,
+                    border: `1px solid rgba(74,222,128,0.5)`,
+                    background: "linear-gradient(135deg, #15803d 0%, #166534 100%)",
+                    boxShadow: `0 6px 20px rgba(74,222,128,0.4)`,
+                    color: "#ffffff",
+                    fontFamily: "inherit",
+                    fontWeight: 900,
+                    fontSize: 15,
+                    letterSpacing: 1.5,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                  onClick={() => {
+                    const playerObj = ticketData.player || ticketData;
+                    const rem = ticketData.attempts_remaining !== undefined
+                      ? ticketData.attempts_remaining
+                      : Math.max(0, 3 - (ticketData.attempts_used || 0));
+                    onStartGame(playerObj, rem);
+                  }}
+                >
+                  <Play size={18} fill="#ffffff" /> START GAME NOW
+                </button>
+              )}
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={refreshTicketStatus}
+                  style={{
+                    flex: 1,
+                    height: 42,
+                    borderRadius: 14,
+                    border: `1px solid rgba(255,255,255,0.1)`,
+                    background: "rgba(15,23,42,0.6)",
+                    color: colors.text,
+                    fontFamily: "inherit",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <RefreshCw size={13} /> REFRESH
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    flex: 1.2,
+                    height: 42,
+                    borderRadius: 14,
+                    border: `1px solid rgba(168,85,247,0.4)`,
+                    background: "linear-gradient(135deg, #4338ca 0%, #312e81 100%)",
+                    boxShadow: `0 6px 18px ${colors.accentGlow}`,
+                    color: colors.text,
+                    fontFamily: "inherit",
+                    fontWeight: 800,
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                  onClick={() => setTicketData(null)}
+                >
+                  DONE <Sparkle size={13} color="#fff" fill="#fff" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
