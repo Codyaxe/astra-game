@@ -25,6 +25,7 @@ export default function ConstellationLayer({
   winTurnX = 0, // Cinematic lower-right ship turn offset X
   winTurnY = 0, // Cinematic lower-right ship turn offset Y
   showTutorialGuide = false, // Animated ghost reticle guide during tutorial
+  isTutorial = false, // Only show tutorial undo tooltips during tutorial stage
 }) {
   const cx = width / 2;
   const cy = height / 2;
@@ -225,8 +226,8 @@ export default function ConstellationLayer({
               strokeLinecap="round"
             />
 
-            {/* Backtrack / Undo Visual Indicator Pill on Erroneous Line */}
-            {isWrong && (
+            {/* Backtrack / Undo Visual Indicator Pill on Erroneous Line (Only in Tutorial) */}
+            {isWrong && isTutorial && (
               <g
                 transform={`translate(${midX}, ${midY})`}
                 style={{

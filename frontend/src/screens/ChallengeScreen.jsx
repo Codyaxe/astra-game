@@ -40,11 +40,20 @@ export default function ChallengeScreen({
   allowFakeNodeTrace = true,
   snappingMode = 'sequential',
   snappingRadiusMultiplier = 1.0,
+  mistakeBannerMode = 'tutorial_only',
   onWinStart,
   onComplete,
   onForceExit,
   onDisqualified,
 }) {
+  const isTutorial = attemptNumber === 1 && constellationIndex === 0;
+  const shouldShowMistakeAlert =
+    mistakeBannerMode === 'always'
+      ? true
+      : mistakeBannerMode === 'disabled'
+        ? false
+        : isTutorial;
+
   const [sessionId, setSessionId] = useState(null);
   const [completedConnections, setCompletedConnections] = useState([]); // [{ from, to }]
   const [activeNode, setActiveNode] = useState(null);
@@ -884,6 +893,7 @@ export default function ChallengeScreen({
         width={dimensions.w}
         height={dimensions.h}
         showTutorialGuide={isBriefingActive}
+        isTutorial={shouldShowMistakeAlert}
       />
 
       {/* Floating Wand Reticle Cursor Overlay */}
@@ -903,8 +913,8 @@ export default function ChallengeScreen({
         />
       )}
 
-      {/* Holographic Backtracking Prompt Banner (When Mistake is Present) */}
-      {winFlybyProgress === null && completedConnections.some((c) => c.isWrong) && (
+      {/* Holographic Backtracking Prompt Banner (Gated by Admin / Tutorial Setting) */}
+      {winFlybyProgress === null && shouldShowMistakeAlert && completedConnections.some((c) => c.isWrong) && (
         <div
           style={{
             position: 'fixed',

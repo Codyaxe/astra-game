@@ -521,6 +521,7 @@ export default function App() {
           allowFakeNodeTrace={gameSettings.allowFakeNodeTrace ?? true}
           snappingMode={gameSettings.snappingMode || 'sequential'}
           snappingRadiusMultiplier={gameSettings.snappingRadiusMultiplier || 1.0}
+          mistakeBannerMode={gameSettings.mistakeBannerMode || 'tutorial_only'}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}

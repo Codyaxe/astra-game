@@ -759,6 +759,41 @@ export default function Dashboard({
                 </div>
               </div>
 
+              {/* Mistake Backtrack HUD Alert Mode */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Mistake Backtrack HUD Alert:</div>
+                    <div style={{ fontSize: 10, color: colors.textDim }}>Show top alert banner and line badge when an error line is made</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { id: 'tutorial_only', label: 'Tutorial Only (Default)' },
+                      { id: 'always', label: 'Always On (All Stages)' },
+                      { id: 'disabled', label: 'Disabled' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => onUpdateSettings({ mistakeBannerMode: opt.id })}
+                        style={{
+                          background: (gameSettings.mistakeBannerMode || 'tutorial_only') === opt.id ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.mistakeBannerMode || 'tutorial_only') === opt.id ? "#fff" : colors.textDim,
+                          border: (gameSettings.mistakeBannerMode || 'tutorial_only') === opt.id ? `1px solid ${colors.iconPurple}` : "1px solid transparent",
+                          borderRadius: 8,
+                          padding: "5px 10px",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Reverse Trace Undo Info Banner */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.3)", padding: "7px 10px", borderRadius: 8, marginTop: 2 }}>
                 <span style={{ fontSize: 14 }}>↩️</span>
