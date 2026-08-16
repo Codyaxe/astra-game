@@ -586,10 +586,17 @@ export default function Dashboard({
                     ].map((g) => (
                       <button
                         key={g.id}
-                        onClick={() => onUpdateSettings({ gestureStyle: g.id })}
+                        onClick={() => {
+                          if (g.id === "point_auto") {
+                            // Point mode requires sequential snapping
+                            onUpdateSettings({ gestureStyle: g.id, snappingMode: "sequential" });
+                          } else {
+                            onUpdateSettings({ gestureStyle: g.id });
+                          }
+                        }}
                         style={{
-                          background: (gameSettings.gestureStyle || "point_auto") === g.id ? colors.accent : "rgba(255,255,255,0.06)",
-                          color: (gameSettings.gestureStyle || "point_auto") === g.id ? "#fff" : colors.textDim,
+                          background: (gameSettings.gestureStyle || "fist_open") === g.id ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.gestureStyle || "fist_open") === g.id ? "#fff" : colors.textDim,
                           border: "none",
                           borderRadius: 8,
                           padding: "6px 12px",
@@ -606,10 +613,10 @@ export default function Dashboard({
                 </div>
 
                 <div style={{ fontSize: 10, color: colors.textDim, background: "rgba(0,0,0,0.25)", padding: "6px 10px", borderRadius: 8 }}>
-                  {(gameSettings.gestureStyle || "point_auto") === "point_auto" ? (
-                    <span>👉 <b>Point Auto-Trace</b>: Simply point your wand / index finger to trace and snap lines automatically.</span>
+                  {(gameSettings.gestureStyle || "fist_open") === "point_auto" ? (
+                    <span>👉 <b>Point Auto-Trace</b>: Continuous pointing trace (Sequential Only — chains A ➔ B ➔ C).</span>
                   ) : (
-                    <span>✋ <b>Palm & Fist Mode</b>: <b>Open Palm</b> = trace & connect starlight beam · <b>Closed Fist</b> = pause/stop tracing.</span>
+                    <span>✋ <b>Palm & Fist Mode</b>: <b>Open Palm</b> = trace & connect · <b>Closed Fist</b> = pause/stop tracing (Supports Freeform).</span>
                   )}
                 </div>
               </div>
@@ -620,22 +627,32 @@ export default function Dashboard({
                   <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Snapping Flow Mode:</span>
                   <div style={{ display: "flex", gap: 6 }}>
                     {[
-                      { id: "sequential", label: "⛓️ Sequential (A➔B➔C)" },
-                      { id: "freeform", label: "✨ Freeform (Any Star)" },
+                      { id: "freeform", label: "✨ Freeform (Any Star)", disabled: (gameSettings.gestureStyle || "fist_open") === "point_auto" },
+                      { id: "sequential", label: "⛓️ Sequential (A➔B➔C)", disabled: false },
                     ].map((s) => (
                       <button
                         key={s.id}
-                        onClick={() => onUpdateSettings({ snappingMode: s.id })}
+                        disabled={s.disabled}
+                        onClick={() => !s.disabled && onUpdateSettings({ snappingMode: s.id })}
                         style={{
-                          background: (gameSettings.snappingMode || "sequential") === s.id ? colors.accent : "rgba(255,255,255,0.06)",
-                          color: (gameSettings.snappingMode || "sequential") === s.id ? "#fff" : colors.textDim,
-                          border: "none",
+                          background: s.disabled
+                            ? "rgba(255,255,255,0.02)"
+                            : (gameSettings.snappingMode || "freeform") === s.id
+                            ? colors.accent
+                            : "rgba(255,255,255,0.06)",
+                          color: s.disabled
+                            ? "rgba(255,255,255,0.2)"
+                            : (gameSettings.snappingMode || "freeform") === s.id
+                            ? "#fff"
+                            : colors.textDim,
+                          border: s.disabled ? "1px dashed rgba(255,255,255,0.1)" : "none",
                           borderRadius: 8,
                           padding: "6px 12px",
                           fontSize: 11,
                           fontWeight: 700,
-                          cursor: "pointer",
+                          cursor: s.disabled ? "not-allowed" : "pointer",
                           transition: "all 0.15s",
+                          opacity: s.disabled ? 0.45 : 1,
                         }}
                       >
                         {s.label}
@@ -645,10 +662,12 @@ export default function Dashboard({
                 </div>
 
                 <div style={{ fontSize: 10, color: colors.textDim, background: "rgba(0,0,0,0.25)", padding: "6px 10px", borderRadius: 8 }}>
-                  {(gameSettings.snappingMode || "sequential") === "sequential" ? (
-                    <span>⛓️ <b>Sequential Chain</b>: Once you snap A ➔ B, the base stays at B so you continue chained to B ➔ C, C ➔ D.</span>
+                  {(gameSettings.gestureStyle || "fist_open") === "point_auto" ? (
+                    <span style={{ color: "#facc15" }}>⚠️ <b>Point Mode is locked to Sequential Snapping</b> (Freeform requires Mouse or ✋ Palm/Fist gesture).</span>
+                  ) : (gameSettings.snappingMode || "freeform") === "freeform" ? (
+                    <span>✨ <b>Freeform Mode (Mouse & ✋ Palm/Fist)</b>: Start anywhere, connect in any order. Retracing an exact edge untraces it.</span>
                   ) : (
-                    <span>✨ <b>Freeform Snapping</b>: Trace from any star to any star at any time (e.g. trace A ➔ B, then start a new trace from C ➔ A).</span>
+                    <span>⛓️ <b>Sequential Chain</b>: Continuously chains from the head star A ➔ B ➔ C. Backtracking undoes the previous node in the chain.</span>
                   )}
                 </div>
               </div>
