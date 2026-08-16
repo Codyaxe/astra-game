@@ -530,6 +530,51 @@ export default function Dashboard({
                 </div>
               </div>
 
+              {/* Difficulty Level Tier Selector */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Game Difficulty Tier:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { id: "easy", label: "🟢 Easy", color: "#4ade80", bg: "rgba(74, 222, 128, 0.2)" },
+                      { id: "medium", label: "🟡 Medium", color: "#facc15", bg: "rgba(250, 204, 21, 0.2)" },
+                      { id: "hard", label: "🔴 Hard", color: "#f87171", bg: "rgba(248, 113, 113, 0.2)" },
+                    ].map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => onUpdateSettings({ difficulty: d.id })}
+                        style={{
+                          background: (gameSettings.difficulty || "easy") === d.id ? d.bg : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.difficulty || "easy") === d.id ? d.color : colors.textDim,
+                          border: (gameSettings.difficulty || "easy") === d.id ? `1px solid ${d.color}` : "1px solid transparent",
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Difficulty Rules Description Summary */}
+                <div style={{ fontSize: 11, color: colors.textDim, background: "rgba(0,0,0,0.25)", padding: "8px 10px", borderRadius: 8, marginTop: 4 }}>
+                  {(gameSettings.difficulty || "easy") === "easy" && (
+                    <span>🟢 <b>Easy (Cadet)</b>: Tracing Guide Lines ON · White Dwarfs Visible · Star Names Visible · 30s Timer</span>
+                  )}
+                  {(gameSettings.difficulty || "easy") === "medium" && (
+                    <span>🟡 <b>Medium (Officer)</b>: Tracing Guides Hidden · Star Names Hidden · Normal Star Decoys · 30s Timer</span>
+                  )}
+                  {(gameSettings.difficulty || "easy") === "hard" && (
+                    <span>🔴 <b>Hard (Commander)</b>: Tracing Guides Hidden · Star Names Hidden · Normal Star Decoys · ⚡ <b>15s Timer (Halfed)</b></span>
+                  )}
+                </div>
+              </div>
+
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>In-Game Camera Preview (PIP):</span>
                 <button

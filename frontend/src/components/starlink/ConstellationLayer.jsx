@@ -15,6 +15,7 @@ export default function ConstellationLayer({
   activeStarId = null,
   drawingPath = [], // Freehand trajectory sample points [{x, y}, ...]
   snapEffect = null, // { success: bool, from, to, timestamp }
+  difficulty = 'easy', // 'easy' | 'medium' | 'hard'
   width = window.innerWidth,
   height = window.innerHeight,
   opacity = 1,
@@ -146,8 +147,8 @@ export default function ConstellationLayer({
         </radialGradient>
       </defs>
 
-      {/* 0. Semi-Transparent Blue Guide Lines for Target Valid Connections */}
-      {validGuideSegments.map((segment, idx) => {
+      {/* 0. Semi-Transparent Blue Guide Lines for Target Valid Connections (Easy Mode Only) */}
+      {difficulty === 'easy' && validGuideSegments.map((segment, idx) => {
         const fromStar = starMap.get(segment.from);
         const toStar = starMap.get(segment.to);
         if (!fromStar || !toStar) return null;
@@ -271,19 +272,23 @@ export default function ConstellationLayer({
           (s) => s.from === star.id || s.to === star.id
         );
 
-        const nodeRadius = (isActive ? 28 : isConnected ? 22 : isFake ? 14 : 16) * scale;
-        const coreRadius = (isActive ? 5 : isFake ? 2.5 : 3.5) * scale;
+        // In Easy mode, fake stars are rendered visibly as White Dwarfs.
+        // In Medium and Hard modes, fake stars look like normal authentic constellation stars!
+        const showAsWhiteDwarf = isFake && difficulty === 'easy';
+
+        const nodeRadius = (isActive ? 28 : isConnected ? 22 : showAsWhiteDwarf ? 14 : 16) * scale;
+        const coreRadius = (isActive ? 5 : showAsWhiteDwarf ? 2.5 : 3.5) * scale;
 
         return (
           <g key={`star-${star.id}`} transform={`translate(${star.x}, ${star.y})`}>
             {/* Outer Aura Glow */}
             <circle
               r={nodeRadius}
-              fill={isFake ? "rgba(148, 163, 184, 0.18)" : "url(#star-aura)"}
+              fill={showAsWhiteDwarf ? "rgba(148, 163, 184, 0.18)" : "url(#star-aura)"}
               className="star-node-aura"
             />
 
-            {isFake ? (
+            {showAsWhiteDwarf ? (
               /* White Dwarf Dead Star Asset — Small, dense, cold pale cyan-gray core with dashed icy ring */
               <g>
                 <circle r={8 * scale} fill="none" stroke="#64748B" strokeWidth="1" strokeDasharray="3 2" opacity="0.65" />
@@ -301,18 +306,20 @@ export default function ConstellationLayer({
               </g>
             )}
 
-            {/* Star ID Badge Label */}
-            <text
-              y={nodeRadius + 15}
-              textAnchor="middle"
-              fill={isFake ? '#64748B' : (isConnected || isActive ? '#F4D58D' : '#94A3B8')}
-              fontSize="12"
-              fontWeight="bold"
-              fontFamily="sans-serif"
-              style={{ pointerEvents: 'none', userSelect: 'none' }}
-            >
-              #{star.id} {star.label ? `(${star.label})` : isFake ? '(White Dwarf)' : ''}
-            </text>
+            {/* Star ID Badge Label — Only visible in Easy Mode */}
+            {difficulty === 'easy' && (
+              <text
+                y={nodeRadius + 15}
+                textAnchor="middle"
+                fill={showAsWhiteDwarf ? '#64748B' : (isConnected || isActive ? '#F4D58D' : '#94A3B8')}
+                fontSize="12"
+                fontWeight="bold"
+                fontFamily="sans-serif"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+              >
+                #{star.id} {star.label ? `(${star.label})` : isFake ? '(White Dwarf)' : ''}
+              </text>
+            )}
           </g>
         );
       })}

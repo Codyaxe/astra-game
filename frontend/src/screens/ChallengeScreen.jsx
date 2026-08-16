@@ -34,6 +34,7 @@ export default function ChallengeScreen({
   attemptNumber = 1,
   controlMode = 'hybrid',
   showCamPip = false,
+  difficulty = 'easy',
   onWinStart,
   onComplete,
   onForceExit,
@@ -63,7 +64,8 @@ export default function ChallengeScreen({
 
   // Timer expiration handler (forward declared via ref to avoid circular dependency)
   const timerExpireRef = useRef(null);
-  const timeLimit = constellationList?.timeLimitSec || 30;
+  const baseTime = constellationList?.timeLimitSec || 30;
+  const timeLimit = difficulty === 'hard' ? Math.max(10, Math.floor(baseTime / 2)) : baseTime;
   const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, (elapsed) => {
     if (timerExpireRef.current) timerExpireRef.current(elapsed);
   });
@@ -664,6 +666,7 @@ export default function ChallengeScreen({
         activeStarId={activeNode?.id}
         drawingPath={activeDrawingPath}
         snapEffect={snapEffect}
+        difficulty={difficulty}
         opacity={layerOpacity}
         scale={layerScale}
         winTurnX={winTurnX}

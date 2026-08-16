@@ -299,6 +299,7 @@ export default function App() {
           attemptNumber={attemptNumber}
           controlMode={gameSettings.controlMode}
           showCamPip={gameSettings.showCamPip}
+          difficulty={gameSettings.difficulty || 'easy'}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}

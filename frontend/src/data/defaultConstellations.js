@@ -8,7 +8,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 1,
     name: 'Aries',
     head_node_id: 0,
-    time_limit_sec: 20,
+    time_limit_sec: 30,
     star_nodes: [
       { id: 0, label: 'Hamal (A)',    x: 0.30, y: 0.40, next_node_id: 1,    hitbox_radius: 0.005 },
       { id: 1, label: 'Sheratan (B)', x: 0.45, y: 0.35, next_node_id: 2,    hitbox_radius: 0.005 },

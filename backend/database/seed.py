@@ -15,7 +15,7 @@ CONSTELLATIONS = [
     {
         "name": "Aries",
         "head_node_id": 0,
-        "time_limit_sec": 20,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Hamal (A)",   "x": 0.30, "y": 0.40, "next_node_id": 1,    "hitbox_radius": 0.055},
             {"id": 1, "label": "Sheratan (B)","x": 0.45, "y": 0.35, "next_node_id": 2,    "hitbox_radius": 0.055},
@@ -67,15 +67,15 @@ CONSTELLATIONS = [
             {"id": 109, "x": 0.50, "y": 0.85, "hitbox_radius": 0.045},
         ],
     },
-    {"name": "Gemini", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
-    {"name": "Taurus", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
-    {"name": "Libra", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
-    {"name": "Leo", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
+    {"name": "Gemini", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
+    {"name": "Taurus", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
+    {"name": "Libra", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
+    {"name": "Leo", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
     {"name": "Scorpius", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
-    {"name": "Cassiopeia", "head_node_id": 0, "time_limit_sec": 20, "star_nodes": [], "fake_nodes": []},
-    {"name": "Cygnus", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
+    {"name": "Cassiopeia", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
+    {"name": "Cygnus", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
     {"name": "Ursa Major", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
-    {"name": "Canis Major", "head_node_id": 0, "time_limit_sec": 25, "star_nodes": [], "fake_nodes": []},
+    {"name": "Canis Major", "head_node_id": 0, "time_limit_sec": 30, "star_nodes": [], "fake_nodes": []},
 ]
 
 
