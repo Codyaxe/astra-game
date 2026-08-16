@@ -27,11 +27,11 @@ import { PLACEHOLDER_STARS } from '../mock/placeholders';
 import SubtitleOverlay from '../components/dialogue/SubtitleOverlay';
 import useDialogueController from '../hooks/useDialogueController';
 import { DIALOGUE_CONFIG } from '../config/dialogueConfig';
-import TutorialBriefingModal from '../components/TutorialBriefingModal';
 
 export default function ChallengeScreen({
   player,
   constellationData,
+  constellationIndex = 0,
   attemptNumber = 1,
   controlMode = 'hybrid',
   showCamPip = false,
@@ -254,7 +254,11 @@ export default function ChallengeScreen({
           hasEndedRef.current = true;
           setActiveNode(null);
           stopTimer();
-          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED!', 'color: #4ade80; font-weight: bold;');
+
+          // Full Aries Constellation Completed -> End Briefing
+          setIsBriefingActive(false);
+          stopDialogue();
+          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED -> Briefing Ended!', 'color: #4ade80; font-weight: bold;');
 
           const elapsed = Date.now() - startTimeRef.current;
           const elapsedSec = Math.round(elapsed / 100) / 10;
@@ -658,8 +662,9 @@ export default function ChallengeScreen({
     prevPointerRef.current = pointer;
   }, [pointer]);
 
-  // Briefing State: Voiceover plays during constellation entrance; timer starts after briefing or on skip
-  const [isBriefingActive, setIsBriefingActive] = useState(true);
+  // Briefing State: Voiceover & ghost tracing animation only play on Tutorial Stage (Aries / stage 0)
+  const isTutorialStage = constellationIndex === 0 || constellationData?.name?.toLowerCase().includes('aries');
+  const [isBriefingActive, setIsBriefingActive] = useState(isTutorialStage);
 
   const handleSkipBriefing = useCallback(() => {
     setIsBriefingActive(false);
@@ -677,16 +682,19 @@ export default function ChallengeScreen({
     setTotalClicks(0);
     setRecalibrationCount(0);
     wandTravelDistRef.current = 0;
-    setIsBriefingActive(true);
 
-    console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Starting Entrance Briefing Voiceover...', 'color: #38bdf8; font-weight: bold;');
-    // Play Ship AI Phase A & B Voiceovers during entrance briefing
-    playSequence([...DIALOGUE_CONFIG.phaseA, ...DIALOGUE_CONFIG.phaseB], () => {
-      console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Entrance Voiceover completed -> Starting Timer', 'color: #70a1ff;');
+    if (isTutorialStage) {
+      setIsBriefingActive(true);
+      console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Starting Tutorial Stage Briefing Voiceover...', 'color: #38bdf8; font-weight: bold;');
+      // Play Ship AI Phase A & B Voiceovers during tutorial entrance briefing
+      playSequence([...DIALOGUE_CONFIG.phaseA, ...DIALOGUE_CONFIG.phaseB], () => {
+        console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Entrance Voiceover audio finished.', 'color: #70a1ff;');
+      });
+    } else {
       setIsBriefingActive(false);
       startTimeRef.current = Date.now();
       startTimer();
-    });
+    }
 
     if (player?.id && constellationData?.id) {
       startSession(player.id, constellationData.id)
@@ -702,7 +710,7 @@ export default function ChallengeScreen({
       window.removeEventListener('resize', onResize);
       stopDialogue();
     };
-  }, [constellationData?.id, attemptNumber]);
+  }, [constellationData?.id, attemptNumber, isTutorialStage]);
 
   // Calculate presentation scale and opacity (Entrance Arrival Easing + Win Fly-by Turn)
   let layerScale = 1.0;
@@ -800,6 +808,7 @@ export default function ChallengeScreen({
         winTurnY={winTurnY}
         width={dimensions.w}
         height={dimensions.h}
+        showTutorialGuide={isBriefingActive}
       />
 
       {/* Floating Wand Reticle Cursor Overlay */}
@@ -815,12 +824,9 @@ export default function ChallengeScreen({
       {winFlybyProgress === null && (
         <HUD
           timeLeft={isBriefingActive ? timeLimit : timeLeft}
-          constellationName={constellationData?.name || constellationList?.name || 'Orion (Demo)'}
+          constellationName={constellationData?.name || constellationList?.name || 'Aries (Tutorial)'}
         />
       )}
-
-      {/* Gameplay Subtitle Overlay */}
-      <SubtitleOverlay subtitle={activeSubtitle} />
 
       {/* Bottom-Right Skip Briefing Action Button (Clean, Non-Obtrusive, Cinematic) */}
       {isBriefingActive && (
@@ -839,30 +845,33 @@ export default function ChallengeScreen({
           <button
             onClick={handleSkipBriefing}
             style={{
-              background: 'linear-gradient(135deg, rgba(244, 213, 141, 0.9) 0%, rgba(224, 169, 59, 0.9) 100%)',
+              background: 'linear-gradient(135deg, rgba(244, 213, 141, 0.95) 0%, rgba(224, 169, 59, 0.95) 100%)',
               color: '#0a0e1a',
               border: '1px solid rgba(244, 213, 141, 0.8)',
-              borderRadius: 14,
-              padding: '10px 22px',
-              fontSize: 13,
+              borderRadius: '14px',
+              padding: '12px 26px',
+              fontSize: '14px',
               fontWeight: 800,
               letterSpacing: '1px',
               cursor: 'pointer',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6), 0 0 20px rgba(244, 213, 141, 0.4)',
+              boxShadow: '0 4px 25px rgba(0, 0, 0, 0.7), 0 0 25px rgba(244, 213, 141, 0.5)',
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: '10px',
               transition: 'all 0.2s ease',
               fontFamily: "'Outfit', sans-serif",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
             onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            <span>SKIP BRIEFING</span>
-            <span style={{ fontSize: 16 }}>⏩</span>
+            <span>START TRACING</span>
+            <span style={{ fontSize: 16 }}>⮞</span>
           </button>
         </div>
       )}
+
+      {/* Gameplay & Transmission Subtitle Overlay */}
+      <SubtitleOverlay subtitle={activeSubtitle} />
     </div>
   );
 }

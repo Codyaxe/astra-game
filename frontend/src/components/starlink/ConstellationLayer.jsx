@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
+import TutorialTracingGuide from './TutorialTracingGuide';
 
 export default function ConstellationLayer({
   stars = [],
@@ -23,6 +24,7 @@ export default function ConstellationLayer({
   turnShift = 0, // Horizontal parallax turn shift
   winTurnX = 0, // Cinematic lower-right ship turn offset X
   winTurnY = 0, // Cinematic lower-right ship turn offset Y
+  showTutorialGuide = false, // Animated ghost reticle guide during tutorial
 }) {
   const cx = width / 2;
   const cy = height / 2;
@@ -310,6 +312,17 @@ export default function ConstellationLayer({
             }
           `}</style>
         </g>
+      )}
+
+      {/* 3.5 Animated Holographic Ghost Tracing Guide (Tutorial Stage Demonstration) */}
+      {showTutorialGuide && (
+        <TutorialTracingGuide
+          starNodes={stars.filter((s) => s.id !== undefined && s.id < 100)}
+          toPx={toPx}
+          width={width}
+          height={height}
+          isActive={showTutorialGuide}
+        />
       )}
 
       {/* 4. Star Nodes with Star ID Labels */}
