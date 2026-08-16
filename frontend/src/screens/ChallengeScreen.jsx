@@ -226,6 +226,41 @@ export default function ChallengeScreen({
    */
   const [snapEffect, setSnapEffect] = useState(null);
 
+  const triggerStageWin = useCallback(() => {
+    if (hasEndedRef.current) return;
+    hasEndedRef.current = true;
+    setActiveNode(null);
+    activeNodeRef.current = null;
+    stopTimer();
+
+    setIsBriefingActive(false);
+    stopDialogue();
+    console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED -> All valid links connected & 0 wrong connections!', 'color: #4ade80; font-weight: bold;');
+
+    const elapsed = Date.now() - startTimeRef.current;
+    const elapsedSec = Math.round(elapsed / 100) / 10;
+    const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
+
+    // High Precision Scoring (3 decimal places in DB, truncated/formatted in UI)
+    const limitSec = timeLimit || 30;
+    const timeRatio = Math.min(1.0, (elapsed / 1000) / limitSec);
+    const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
+    const calculatedScore = Math.round((70 + speedScore) * 1000) / 1000;
+
+    const winResult = {
+      completed_status: 1,
+      isWin: true,
+      score: calculatedScore,
+      telemetry: {
+        time_spent_sec: elapsedSec,
+        wrong_attempts: wrongConnections,
+        travel_dist_cm: travelCm,
+      },
+    };
+
+    startWinDialogue(winResult);
+  }, [timeLimit, wrongConnections, startWinDialogue, stopTimer, stopDialogue]);
+
   const handleDragComplete = useCallback(({ fromStarId, toStarId }) => {
     if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (fromStarId != null && toStarId != null) {
@@ -259,38 +294,7 @@ export default function ChallengeScreen({
         const hasWrongConnections = nextConns.some((c) => c.isWrong);
 
         if (validConnCount >= requiredCount && !hasWrongConnections) {
-          if (!hasEndedRef.current) {
-            hasEndedRef.current = true;
-            setActiveNode(null);
-            activeNodeRef.current = null;
-            stopTimer();
-
-            setIsBriefingActive(false);
-            stopDialogue();
-            console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED (Wrong edge untraced)!', 'color: #4ade80; font-weight: bold;');
-
-            const elapsed = Date.now() - startTimeRef.current;
-            const elapsedSec = Math.round(elapsed / 100) / 10;
-            const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
-
-            const limitSec = timeLimit || 30;
-            const timeRatio = Math.min(1.0, elapsedSec / limitSec);
-            const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
-            const calculatedScore = Math.round((70 + speedScore) * 10) / 10;
-
-            const winResult = {
-              completed_status: 1,
-              isWin: true,
-              score: calculatedScore,
-              telemetry: {
-                time_spent_sec: elapsedSec,
-                wrong_attempts: wrongConnections,
-                travel_dist_cm: travelCm,
-              },
-            };
-
-            startWinDialogue(winResult);
-          }
+          triggerStageWin();
         }
         return;
       }
@@ -330,40 +334,9 @@ export default function ChallengeScreen({
         });
 
         if (validConnCount >= requiredCount && !hasWrongConnections) {
-          if (hasEndedRef.current) return;
-          hasEndedRef.current = true;
-          setActiveNode(null);
-          stopTimer();
-
-          // Full Constellation Completed -> End Briefing
-          setIsBriefingActive(false);
-          stopDialogue();
-          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED -> Zero wrong connections remaining!', 'color: #4ade80; font-weight: bold;');
-
-          const elapsed = Date.now() - startTimeRef.current;
-          const elapsedSec = Math.round(elapsed / 100) / 10;
-          const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
-
-          // Percentage Scoring: 70% Completion + up to 30% Speed Bonus
-          const limitSec = timeLimit || 30;
-          const timeRatio = Math.min(1.0, elapsedSec / limitSec);
-          const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
-          const calculatedScore = Math.round((70 + speedScore) * 10) / 10;
-
-          const winResult = {
-            completed_status: 1,
-            isWin: true,
-            score: calculatedScore,
-            telemetry: {
-              time_spent_sec: elapsedSec,
-              wrong_attempts: wrongConnections,
-              travel_dist_cm: travelCm,
-            },
-          };
-
-          startWinDialogue(winResult);
+          triggerStageWin();
         }
-      } else if (!exists && allowFakeNodeTrace && (difficulty === 'medium' || difficulty === 'hard')) {
+      } else if (allowFakeNodeTrace && (difficulty === 'medium' || difficulty === 'hard')) {
         // TRAP STAR / DECOY SNAP (Adds red error line, shifts activeNode to decoy star)
         console.log('%c[ASTRA DIAGNOSTIC] ⚠️ Decoy Star Trapped!', 'color: #ef4444; font-weight: bold;', fromStarId, '->', toStarId);
         const result = { success: false, from: fromStarId, to: toStarId, timestamp: Date.now() };
@@ -395,7 +368,7 @@ export default function ChallengeScreen({
       setSnapEffect(result);
       playSfx('wrong');
     }
-  }, [completedConnections, isValidEdge, starNodes, fakeNodes, allowFakeNodeTrace, difficulty, snappingMode, wrongConnections, sessionId, totalClicks, recalibrationCount, startWinDialogue, stopTimer, validGuideSegments]);
+  }, [completedConnections, isValidEdge, starNodes, fakeNodes, allowFakeNodeTrace, difficulty, snappingMode, validGuideSegments, triggerStageWin]);
 
   const activeNodeRef = useRef(activeNode);
   useEffect(() => {

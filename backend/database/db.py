@@ -84,7 +84,7 @@ def get_leaderboard(limit: int = 10):
             best_score AS highest_score
         FROM players
         WHERE best_score > 0
-        ORDER BY best_score DESC
+        ORDER BY best_score DESC, total_attempts_used ASC, id ASC
         LIMIT %s
     """
     return execute(query, (limit,))

@@ -175,8 +175,8 @@ export default function App() {
     const updatedScores = [...sessionStageScores, stageScore];
     setSessionStageScores(updatedScores);
 
-    // Compute fair normalized average percentage across all completed stages
-    const averageScore = Math.round((updatedScores.reduce((a, b) => a + b, 0) / updatedScores.length) * 10) / 10;
+    // Compute fair normalized average percentage across all completed stages (stored with 3 decimal precision)
+    const averageScore = Math.round((updatedScores.reduce((a, b) => a + b, 0) / updatedScores.length) * 1000) / 1000;
 
     // Accumulate multi-stage telemetry (total travel distance, total time, total mistakes)
     const stageTelemetry = result?.telemetry || {};

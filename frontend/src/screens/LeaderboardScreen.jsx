@@ -9,6 +9,12 @@ import { getLeaderboard, getTicketDownloadUrl } from '../services/api';
 const MEDALS = ['🥇', '🥈', '🥉'];
 const PODIUM_CLASSES = ['lb-podium-card--gold', 'lb-podium-card--silver', 'lb-podium-card--bronze'];
 
+const formatScore = (val) => {
+  if (val === null || val === undefined) return '0.0';
+  const num = Number(val);
+  return isNaN(num) ? '0.0' : num.toFixed(1);
+};
+
 const PAGE_SIZE = 5;
 
 export default function LeaderboardScreen({ player, lastAttemptResult, attemptNumber = 1, onRetry, onReturnToTitle }) {
@@ -134,7 +140,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
             </div>
 
             <div className="player-score-display">
-              <span className="player-score-value">{bestScore}</span>
+              <span className="player-score-value">{formatScore(bestScore)}</span>
               <span className="player-score-label">Your Best</span>
             </div>
 
@@ -164,7 +170,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
                 <div className="lb-stat-label">Your Rank</div>
               </div>
               <div className="lb-stat-card lb-stat-card--green">
-                <div className="lb-stat-value">{bestScore ? `${bestScore} PTS` : '—'}</div>
+                <div className="lb-stat-value">{bestScore ? `${formatScore(bestScore)} PTS` : '—'}</div>
                 <div className="lb-stat-label">Your Best Score</div>
               </div>
             </>
@@ -187,7 +193,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
                       {row.first_name} {row.last_name}
                     </div>
                     <div className="lb-podium-course">{row.course}</div>
-                    <div className="lb-podium-score">{row.highest_score}</div>
+                    <div className="lb-podium-score">{formatScore(row.highest_score)}</div>
                     <div className="lb-podium-pts">points</div>
                     {isYou && <span className="lb-podium-you-tag">You</span>}
                   </div>
@@ -276,7 +282,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
                             <td className="lb-player-meta">{row.course}</td>
                             <td className="lb-score-cell">
                               <div className="lb-score-inner">
-                                <span className="lb-score-value">{row.highest_score}</span>
+                                <span className="lb-score-value">{formatScore(row.highest_score)}</span>
                                 <div className="lb-score-bar">
                                   <div
                                     className="lb-score-bar-fill"
