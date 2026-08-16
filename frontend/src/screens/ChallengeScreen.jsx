@@ -46,13 +46,14 @@ export default function ChallengeScreen({
   onForceExit,
   onDisqualified,
 }) {
-  const isTutorial = attemptNumber === 1 && constellationIndex === 0;
+  const isAries = Boolean(constellationData?.name?.toLowerCase().includes('aries'));
+  const isTutorialStage = attemptNumber === 1 && isAries;
   const shouldShowMistakeAlert =
     mistakeBannerMode === 'always'
       ? true
       : mistakeBannerMode === 'disabled'
         ? false
-        : isTutorial;
+        : isTutorialStage;
 
   const [sessionId, setSessionId] = useState(null);
   const [completedConnections, setCompletedConnections] = useState([]); // [{ from, to }]
@@ -742,10 +743,6 @@ export default function ChallengeScreen({
   }, [pointer, mouseWand]);
 
   // Briefing State: Voiceover & ghost tracing animation only play on Attempt 1 Tutorial Stage (Aries)
-  const isTutorialStage =
-    attemptNumber === 1 &&
-    constellationIndex === 0 &&
-    Boolean(constellationData?.name?.toLowerCase().includes('aries'));
   const [isBriefingActive, setIsBriefingActive] = useState(isTutorialStage);
 
   const handleSkipBriefing = useCallback(() => {
