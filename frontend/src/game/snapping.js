@@ -26,9 +26,10 @@ export function toScreenNorm(normX, normY) {
  *
  * @param {{x: number, y: number}} pointer  (normalised 0..1)
  * @param {Array<StarNode|object>} starNodes
+ * @param {number} [radiusMultiplier=1.0]
  * @returns {{ snapped: boolean, node: object|null, x: number, y: number }}
  */
-export function getMagneticSnap(pointer, starNodes) {
+export function getMagneticSnap(pointer, starNodes, radiusMultiplier = 1.0) {
   if (!pointer || !starNodes || starNodes.length === 0) {
     return { snapped: false, node: null, x: pointer?.x || 0, y: pointer?.y || 0 };
   }
@@ -37,8 +38,9 @@ export function getMagneticSnap(pointer, starNodes) {
   let nearestScreenPos = null;
   let minDistance = Infinity;
 
-  // Generous magnetic attraction hitbox radius (8.5% of screen width)
+  // Base magnetic attraction hitbox radius (8.5% of screen width)
   const DEFAULT_HITBOX = 0.085;
+  const mult = typeof radiusMultiplier === 'number' && radiusMultiplier > 0 ? radiusMultiplier : 1.0;
 
   for (const node of starNodes) {
     // If node already has mapped screen coordinates, use them; otherwise map through cockpit safe margins
@@ -47,7 +49,7 @@ export function getMagneticSnap(pointer, starNodes) {
       : toScreenNorm(node.x, node.y);
 
     const d = calculateDistance(pointer.x, pointer.y, starScreen.x, starScreen.y);
-    const hitbox = node.hitbox_radius || DEFAULT_HITBOX;
+    const hitbox = (node.hitbox_radius || DEFAULT_HITBOX) * mult;
 
     if (d <= hitbox && d < minDistance) {
       minDistance = d;

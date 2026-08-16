@@ -48,6 +48,7 @@ export default function App() {
   const [autostartData, setAutostartData] = useState(null);
   const [constellations, setConstellations] = useState(DEFAULT_CONSTELLATIONS);
   const [constellationIndex, setConstellationIndex] = useState(0);
+  const [sessionPlaylist, setSessionPlaylist] = useState([]);
   const [isScoreExiting, setIsScoreExiting] = useState(false);
 
   // Preload audio & fetch real constellations from backend
@@ -65,42 +66,13 @@ export default function App() {
       });
   }, []);
 
-  // ---- Navigation Handlers ----
-
-  const handleRegistered = useCallback((playerData, attemptsRemaining) => {
-    setPlayer(playerData);
-    const rem = attemptsRemaining !== undefined ? attemptsRemaining : 3;
-    setAttemptNumber(Math.max(1, 4 - rem));
-    setConstellationIndex(0);
-    setScreen('challenge');
-  }, []);
-
-  const handleQuickPlay = useCallback(() => {
-    const guestPlayer = {
-      id: 9999,
-      first_name: 'Guest',
-      last_name: 'Explorer',
-      sr_code: 'GUEST-01',
-      course: 'BSCS',
-      department: 'CICS',
-      total_attempts_used: 0,
-      best_score: 0,
-    };
-    setPlayer(guestPlayer);
-    setAttemptNumber(1);
-    setConstellationIndex(0);
-    setScreen('challenge');
-  }, []);
-
-  const [isStageWarping, setIsStageWarping] = useState(false);
-
-  // Global Admin Settings (Control Mode & Webcam Preview)
+  // Global Admin Settings (Control Mode, Webcam Preview, Level Count, Snapping Multiplier)
   const [gameSettings, setGameSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('astra_game_settings');
-      return saved ? JSON.parse(saved) : { controlMode: 'hybrid', showCamPip: false };
+      return saved ? JSON.parse(saved) : { controlMode: 'hybrid', showCamPip: false, levelsPerSession: 3, snappingRadiusMultiplier: 1.0 };
     } catch {
-      return { controlMode: 'hybrid', showCamPip: false };
+      return { controlMode: 'hybrid', showCamPip: false, levelsPerSession: 3, snappingRadiusMultiplier: 1.0 };
     }
   });
 
@@ -116,6 +88,62 @@ export default function App() {
     });
   }, []);
 
+  /**
+   * Generates a dynamic session playlist:
+   * 1. Aries is ALWAYS Stage 1 (Tutorial).
+   * 2. Remaining stages are randomly selected and shuffled from the database seed.
+   * 3. Length of playlist conforms to gameSettings.levelsPerSession (default: 3).
+   */
+  const generateSessionPlaylist = useCallback(() => {
+    const allPool = constellations.length > 0 ? constellations : DEFAULT_CONSTELLATIONS;
+    const aries = allPool.find((c) => c.name?.toLowerCase().includes('aries')) || allPool[0];
+    const others = allPool.filter((c) => c !== aries);
+
+    // Fisher-Yates shuffle remaining constellations
+    const shuffled = [...others].sort(() => Math.random() - 0.5);
+
+    const totalLevels = Math.max(1, Math.min(gameSettings.levelsPerSession || 3, allPool.length));
+    const chosenList = [aries, ...shuffled.slice(0, totalLevels - 1)];
+
+    console.log('%c[ASTRA] 🌌 Generated Session Playlist:', 'color: #38bdf8; font-weight: bold;', chosenList.map((c, i) => `${i + 1}. ${c.name}`));
+    setSessionPlaylist(chosenList);
+    return chosenList;
+  }, [constellations, gameSettings.levelsPerSession]);
+
+  // ---- Navigation Handlers ----
+
+  const handleRegistered = useCallback((playerData, attemptsRemaining) => {
+    setPlayer(playerData);
+    const rem = attemptsRemaining !== undefined ? attemptsRemaining : 3;
+    setAttemptNumber(Math.max(1, 4 - rem));
+    generateSessionPlaylist();
+    setConstellationIndex(0);
+    setScreen('challenge');
+  }, [generateSessionPlaylist]);
+
+  const handleQuickPlay = useCallback(() => {
+    const guestPlayer = {
+      id: 9999,
+      first_name: 'Guest',
+      last_name: 'Explorer',
+      sr_code: 'GUEST-01',
+      course: 'BSCS',
+      department: 'CICS',
+      total_attempts_used: 0,
+      best_score: 0,
+    };
+    setPlayer(guestPlayer);
+    setAttemptNumber(1);
+    generateSessionPlaylist();
+    setConstellationIndex(0);
+    setScreen('challenge');
+  }, [generateSessionPlaylist]);
+
+  const [isStageWarping, setIsStageWarping] = useState(false);
+
+  const activePlaylist = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
+  const currentConstellation = activePlaylist[constellationIndex] || activePlaylist[0];
+
   const handleChallengeComplete = useCallback((result) => {
     setIsStageWarping(false);
     setLastAttemptResult(result || { isWin: true, score: 95 });
@@ -126,17 +154,18 @@ export default function App() {
       );
     }
 
-    // Check if more constellations remain in the playlist
-    if (constellationIndex + 1 < constellations.length) {
-      console.log('%c[ASTRA] 🚀 Intermediate Constellation Solved -> Transitioning directly to next stage index:', 'color: #4ade80; font-weight: bold;', constellationIndex + 1);
+    // Check if more constellations remain in the active session playlist
+    const currentList = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
+    if (constellationIndex + 1 < currentList.length) {
+      console.log('%c[ASTRA] 🚀 Stage Solved -> Warping to next randomized constellation:', 'color: #4ade80; font-weight: bold;', currentList[constellationIndex + 1]?.name);
       setConstellationIndex((idx) => idx + 1);
       setScreen('challenge');
     } else {
-      // Completed all constellations -> Show Final Round Score & Leaderboard
-      console.log('%c[ASTRA] 🏆 All Constellations Cleared -> Displaying Final Victory Score Overlay!', 'color: #facc15; font-weight: bold;');
+      // Completed all session constellations -> Show Final Round Score & Leaderboard
+      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Displaying Final Victory Score Overlay!', 'color: #facc15; font-weight: bold;');
       setScreen('challenge_win_score');
     }
-  }, [constellationIndex, constellations.length]);
+  }, [constellationIndex, sessionPlaylist, constellations]);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
     setLastAttemptResult(result || { isWin: false, score: 0 });
@@ -197,8 +226,6 @@ export default function App() {
         setScreen('title');
       });
   }, []);
-
-  const currentConstellation = constellations[constellationIndex] || null;
 
   // Derive global starfield warp state
   const bgState =
@@ -265,6 +292,7 @@ export default function App() {
             };
             setPlayer(adminPlayer);
             setAttemptNumber(1);
+            generateSessionPlaylist();
             setConstellationIndex(stageIdx);
             setScreen('challenge');
           }}
@@ -289,7 +317,7 @@ export default function App() {
           constellation={currentConstellation}
           constellationData={currentConstellation}
           constellationIndex={constellationIndex}
-          totalConstellations={constellations.length}
+          totalConstellations={activePlaylist.length}
           attemptNumber={attemptNumber}
           controlMode={gameSettings.controlMode}
           showCamPip={gameSettings.showCamPip}
@@ -297,6 +325,7 @@ export default function App() {
           gestureStyle={gameSettings.gestureStyle || 'point_auto'}
           allowFakeNodeTrace={gameSettings.allowFakeNodeTrace ?? true}
           snappingMode={gameSettings.snappingMode || 'sequential'}
+          snappingRadiusMultiplier={gameSettings.snappingRadiusMultiplier || 1.0}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}
@@ -310,26 +339,26 @@ export default function App() {
           isWin={screen === 'challenge_win_score'}
           player={player}
           remainingAttempts={Math.max(0, 3 - attemptNumber)}
-          continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < constellations.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
+          continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < activePlaylist.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
           isExiting={isScoreExiting}
           onTryAgain={attemptNumber < 3 ? handleRetryNextAttempt : null}
           onContinue={() => {
             console.log('%c[ASTRA DIAGNOSTIC] 🚀 App.jsx onContinue triggered!', 'color: #4ade80; font-weight: bold;', {
               currentScreen: screen,
               constellationIndex,
-              totalConstellations: constellations.length,
+              totalConstellations: activePlaylist.length,
               player,
               lastAttemptResult,
             });
             if (screen === 'challenge_fail') {
               console.log('%c[ASTRA DIAGNOSTIC] ➡️ Navigating directly to LEADERBOARD (Failure/Disqualified)', 'color: #f87171; font-weight: bold;');
               setScreen('leaderboard');
-            } else if (constellationIndex + 1 < constellations.length) {
+            } else if (constellationIndex + 1 < activePlaylist.length) {
               console.log('%c[ASTRA DIAGNOSTIC] ➡️ Advancing to next constellation stage index:', 'color: #facc15; font-weight: bold;', constellationIndex + 1);
               setConstellationIndex((idx) => idx + 1);
               setScreen('challenge');
             } else {
-              console.log('%c[ASTRA DIAGNOSTIC] ➡️ Solved all constellations -> Navigating to LEADERBOARD', 'color: #4ade80; font-weight: bold;');
+              console.log('%c[ASTRA DIAGNOSTIC] 🏁 Reached final round constellation! Navigating to LEADERBOARD 🏆', 'color: #38bdf8; font-weight: bold;');
               setScreen('leaderboard');
             }
           }}

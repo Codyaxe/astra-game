@@ -39,6 +39,7 @@ export default function ChallengeScreen({
   gestureStyle = 'point_auto',
   allowFakeNodeTrace = true,
   snappingMode = 'sequential',
+  snappingRadiusMultiplier = 1.0,
   onWinStart,
   onComplete,
   onForceExit,
@@ -334,6 +335,7 @@ export default function ChallengeScreen({
   const { wandPointer: mouseWand, drawingPath: mouseDrawingPath } = useMouseWandAdapter({
     stars: [...starNodes, ...fakeNodes],
     enabled: controlMode === 'mouse' || controlMode === 'hybrid',
+    snappingRadiusMultiplier,
     onDragComplete: handleDragComplete,
   });
 
@@ -525,10 +527,10 @@ export default function ChallengeScreen({
   const snappedPointer = useMemo(() => {
     if (!pointer) return null;
     const allStars = [...starNodes, ...fakeNodes];
-    const snap = getMagneticSnap(pointer, allStars);
+    const snap = getMagneticSnap(pointer, allStars, snappingRadiusMultiplier);
     currentSnappedRef.current = snap;
     return snap;
-  }, [pointer, starNodes, fakeNodes]);
+  }, [pointer, starNodes, fakeNodes, snappingRadiusMultiplier]);
 
   // ---- Wand Auto-Snap, Reverse Trace Undo & Fake Star Tracing Engine ----
   const lastAutoSnapTimeRef = useRef(0);
@@ -537,7 +539,7 @@ export default function ChallengeScreen({
     if (!pointer || (controlMode !== 'wand' && controlMode !== 'hybrid')) return;
 
     const allStars = [...starNodes, ...fakeNodes];
-    const snap = getMagneticSnap(pointer, allStars);
+    const snap = getMagneticSnap(pointer, allStars, snappingRadiusMultiplier);
 
     // In Palm/Fist mode: only Open Palm traces. Closed fist pauses and releases freeform anchor.
     if (gestureStyle === 'fist_open' && !pointer.isOpenPalm) {

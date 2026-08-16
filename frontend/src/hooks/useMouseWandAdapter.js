@@ -31,6 +31,7 @@ const getStarScreenNorm = (starX, starY) => {
 export default function useMouseWandAdapter({
   stars = [],
   enabled = true,
+  snappingRadiusMultiplier = 1.0,
   onDragComplete = null, // ({ fromStarId, toStarId }) — raw drag event, logic layer decides validity
 }) {
   const [wandPointer, setWandPointer] = useState({
@@ -53,7 +54,8 @@ export default function useMouseWandAdapter({
   const findNearestStar = useCallback(
     (normX, normY, radius = 0.08) => {
       let nearest = null;
-      let minDistance = radius;
+      const mult = typeof snappingRadiusMultiplier === 'number' && snappingRadiusMultiplier > 0 ? snappingRadiusMultiplier : 1.0;
+      let minDistance = radius * mult;
 
       stars.forEach((star) => {
         const starPos = getStarScreenNorm(star.x, star.y);

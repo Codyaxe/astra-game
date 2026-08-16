@@ -695,6 +695,67 @@ export default function Dashboard({
                 </button>
               </div>
 
+              {/* Constellations Per Session (Level Count) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Constellations Per Session:</div>
+                    <div style={{ fontSize: 10, color: colors.textDim }}>Aries (Tutorial) + randomized pool from database</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[1, 3, 5, 8, 12].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => onUpdateSettings({ levelsPerSession: num })}
+                        style={{
+                          background: (gameSettings.levelsPerSession || 3) === num ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.levelsPerSession || 3) === num ? "#fff" : colors.textDim,
+                          border: (gameSettings.levelsPerSession || 3) === num ? `1px solid ${colors.iconPurple}` : "1px solid transparent",
+                          borderRadius: 8,
+                          padding: "5px 10px",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {num === 1 ? '1 (Tutorial Only)' : `${num} Stages`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Snapping Radius Multiplier Slider */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Magnetic Snapping Radius:</div>
+                    <div style={{ fontSize: 10, color: colors.textDim }}>Increase star hitbox size for easier wand/mouse connection</div>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: colors.gold, background: "rgba(244, 213, 141, 0.15)", padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(244, 213, 141, 0.3)" }}>
+                    {((gameSettings.snappingRadiusMultiplier || 1.0) * 100).toFixed(0)}% ({((gameSettings.snappingRadiusMultiplier || 1.0)).toFixed(1)}x)
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 10, color: colors.textDim }}>1.0x (Default)</span>
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="2.5"
+                    step="0.1"
+                    value={gameSettings.snappingRadiusMultiplier || 1.0}
+                    onChange={(e) => onUpdateSettings({ snappingRadiusMultiplier: parseFloat(e.target.value) })}
+                    style={{
+                      flex: 1,
+                      accentColor: colors.gold,
+                      cursor: "pointer",
+                    }}
+                  />
+                  <span style={{ fontSize: 10, color: colors.textDim }}>2.5x (Super Magnetic)</span>
+                </div>
+              </div>
+
               {/* Reverse Trace Undo Info Banner */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.3)", padding: "7px 10px", borderRadius: 8, marginTop: 2 }}>
                 <span style={{ fontSize: 14 }}>↩️</span>
