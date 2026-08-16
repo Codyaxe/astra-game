@@ -42,25 +42,28 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
     player?.total_attempts_used ??
     attemptNumber;
 
-  const attemptsRemaining = Math.max(0, 3 - attemptNumber);
+  const attemptsRemaining = player ? Math.max(0, 3 - attemptNumber) : 0;
 
-  const bestScore =
-    currentPlayerRow?.highest_score ??
-    currentPlayerRow?.best_score ??
-    lastAttemptResult?.best_score ??
-    lastAttemptResult?.score ??
-    player?.best_score ??
-    0;
+  const bestScore = player
+    ? (currentPlayerRow?.highest_score ??
+       currentPlayerRow?.best_score ??
+       lastAttemptResult?.best_score ??
+       lastAttemptResult?.score ??
+       player?.best_score ??
+       0)
+    : 0;
 
   // Derived stats
   const totalParticipants = leaderboard.length;
-  const yourRank = currentPlayerRow
-    ? leaderboard.indexOf(currentPlayerRow) + 1
-    : (bestScore > 0 && totalParticipants > 0
-      ? (leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) !== -1
-        ? leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) + 1
-        : totalParticipants + 1)
-      : (bestScore > 0 ? 1 : null));
+  const yourRank = player
+    ? (currentPlayerRow
+      ? leaderboard.indexOf(currentPlayerRow) + 1
+      : (bestScore > 0 && totalParticipants > 0
+        ? (leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) !== -1
+          ? leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) + 1
+          : totalParticipants + 1)
+        : null))
+    : null;
 
   // Top 3 and the rest
   const podium = leaderboard.slice(0, 3);
@@ -105,7 +108,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
           <p className="lb-subtitle">Rankings based on highest retained score</p>
         </div>
 
-        {/* Player Summary */}
+        {/* Player Summary Card (Only shown if player exists) */}
         {player && (
           <div className="player-summary-card">
             <div className="player-summary-info">
@@ -135,14 +138,16 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
               <span className="player-score-label">Your Best</span>
             </div>
 
-            <div className="player-summary-qr">
-              <img
-                src={getTicketDownloadUrl(player.id)}
-                alt="Your QR Ticket"
-                className="ticket-thumb"
-              />
-              <span className="qr-hint">{player.qr_ticket_code}</span>
-            </div>
+            {player.id && (
+              <div className="player-summary-qr">
+                <img
+                  src={getTicketDownloadUrl(player.id)}
+                  alt="Your QR Ticket"
+                  className="ticket-thumb"
+                />
+                <span className="qr-hint">{player.qr_ticket_code}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -152,14 +157,18 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
             <div className="lb-stat-value">{totalParticipants}</div>
             <div className="lb-stat-label">Total Participants</div>
           </div>
-          <div className="lb-stat-card lb-stat-card--gold">
-            <div className="lb-stat-value">{yourRank ? `#${yourRank}` : '—'}</div>
-            <div className="lb-stat-label">Your Rank</div>
-          </div>
-          <div className="lb-stat-card lb-stat-card--green">
-            <div className="lb-stat-value">{bestScore}</div>
-            <div className="lb-stat-label">Your Best Score</div>
-          </div>
+          {player && (
+            <>
+              <div className="lb-stat-card lb-stat-card--gold">
+                <div className="lb-stat-value">{yourRank ? `#${yourRank}` : '—'}</div>
+                <div className="lb-stat-label">Your Rank</div>
+              </div>
+              <div className="lb-stat-card lb-stat-card--green">
+                <div className="lb-stat-value">{bestScore ? `${bestScore} PTS` : '—'}</div>
+                <div className="lb-stat-label">Your Best Score</div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Podium — Top 3 */}
@@ -329,7 +338,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
                     <button
                       className="lb-page-btn"
                       disabled={safeCurrentPage >= totalPages}
-                      onClick={() => setCurrentPage((p) => p + 1)}
+                      onClick={() => setCurrentPage((p) => p - 1)}
                     >
                       Next →
                     </button>
