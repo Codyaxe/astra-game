@@ -20,7 +20,7 @@ import HUD from '../components/HUD';
 import { useWandGestures } from '../hooks/useWandGestures';
 import { useGameTimer } from '../hooks/useGameTimer';
 import { ConstellationLinkedList } from '../game/linkedListConstellation';
-import { getMagneticSnap, calculateDistance } from '../game/snapping';
+import { getMagneticSnap, calculateDistance, toScreenNorm } from '../game/snapping';
 import { playSfx } from '../utils/audio';
 import { startSession, submitAttempt } from '../services/api';
 import { PLACEHOLDER_STARS } from '../mock/placeholders';
@@ -32,6 +32,8 @@ export default function ChallengeScreen({
   player,
   constellationData,
   attemptNumber = 1,
+  controlMode = 'hybrid',
+  showCamPip = false,
   onWinStart,
   onComplete,
   onForceExit,
@@ -214,8 +216,9 @@ export default function ChallengeScreen({
         if (updatedConns.length >= requiredCount) {
           if (hasEndedRef.current) return;
           hasEndedRef.current = true;
+          setActiveNode(null);
           stopTimer();
-          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED (Mouse Drag)!', 'color: #4ade80; font-weight: bold;');
+          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED!', 'color: #4ade80; font-weight: bold;');
 
           const elapsed = Date.now() - startTimeRef.current;
           const elapsedSec = Math.round(elapsed / 100) / 10;
@@ -263,10 +266,15 @@ export default function ChallengeScreen({
     }
   }, [completedConnections, isValidEdge]);
 
-  // Mouse-to-Wand Testing Adapter — pure input emitter, no snap logic inside
-  const { wandPointer: mouseWand, drawingPath } = useMouseWandAdapter({
+  const activeNodeRef = useRef(activeNode);
+  useEffect(() => {
+    activeNodeRef.current = activeNode;
+  }, [activeNode]);
+
+  // Mouse-to-Wand Testing Adapter — pure input emitter, enabled only when in mouse/hybrid mode
+  const { wandPointer: mouseWand, drawingPath: mouseDrawingPath } = useMouseWandAdapter({
     stars: [...starNodes, ...fakeNodes],
-    enabled: true,
+    enabled: controlMode === 'mouse' || controlMode === 'hybrid',
     onDragComplete: handleDragComplete,
   });
 
@@ -448,22 +456,92 @@ export default function ChallengeScreen({
   }, [activeNode, constellationList, completedConnections, sessionId, wrongConnections, totalClicks, recalibrationCount, onComplete]);
 
   // ---- 3. Wand Gestures Hook ----
+  const handleWandConnectionCycle = useCallback(() => {
+    const snapped = currentSnappedRef.current;
+    const originNode = activeNodeRef.current;
+    console.log('%c[ASTRA DIAGNOSTIC] 🪄 Wand Connection Cycle Fired!', 'color: #38bdf8;', {
+      snappedNode: snapped?.node?.id,
+      originNode: originNode?.id,
+    });
+    if (snapped?.node && originNode) {
+      handleDragComplete({
+        fromStarId: originNode.id,
+        toStarId: snapped.node.id,
+      });
+    }
+  }, [handleDragComplete]);
+
   const { videoRef, pointer, onDraw, gestureStatus, isReady } = useWandGestures({
-    enabled: true,
+    enabled: controlMode === 'wand' || controlMode === 'hybrid',
     onResetLines: handleResetLines,
     onForceExit: handleCircleExit,
     onRecalibrate: handleRecalibrate,
-    onConnectionCycleComplete: handleConnectionCycleComplete,
+    onConnectionCycleComplete: handleWandConnectionCycle,
   });
 
-  // Calculate magnetic snap every pointer update
+  // Calculate magnetic snap every pointer update against all active star nodes
   const snappedPointer = useMemo(() => {
-    if (!pointer || !constellationList) return null;
-    const allStars = constellationList.getAllStarNodes();
+    if (!pointer) return null;
+    const allStars = [...starNodes, ...fakeNodes];
     const snap = getMagneticSnap(pointer, allStars);
     currentSnappedRef.current = snap;
     return snap;
-  }, [pointer, constellationList]);
+  }, [pointer, starNodes, fakeNodes]);
+
+  // ---- Wand Auto-Snap & Auto-Trace Engine (Proximity based, zero pinch needed) ----
+  const lastAutoSnapTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (!pointer || (controlMode !== 'wand' && controlMode !== 'hybrid')) return;
+
+    const allStars = [...starNodes, ...fakeNodes];
+    const snap = getMagneticSnap(pointer, allStars);
+
+    // If activeNode is null, auto-lock onto any star the player hovers near
+    if (!activeNode && snap.snapped && snap.node) {
+      setActiveNode(snap.node);
+      playSfx('correct');
+      return;
+    }
+
+    // If activeNode is set and player moves near a valid next target star
+    if (activeNode && snap.snapped && snap.node && snap.node.id !== activeNode.id) {
+      const now = Date.now();
+      // Debounce auto-snap by 280ms
+      if (now - lastAutoSnapTimeRef.current > 280) {
+        const fromId = activeNode.id;
+        const toId = snap.node.id;
+
+        // Check if this is a valid edge
+        const valid = isValidEdge(fromId, toId);
+        const exists = completedConnections.some(
+          (s) => (s.from === fromId && s.to === toId) || (s.from === toId && s.to === fromId)
+        );
+
+        if (valid && !exists) {
+          lastAutoSnapTimeRef.current = now;
+          console.log('%c[ASTRA DIAGNOSTIC] 🪄 Auto-Snapped Edge (Proximity):', 'color: #4ade80; font-weight: bold;', fromId, '->', toId);
+          setActiveNode(snap.node);
+          handleDragComplete({ fromStarId: fromId, toStarId: toId });
+        }
+      }
+    }
+  }, [pointer, activeNode, starNodes, fakeNodes, controlMode, isValidEdge, completedConnections, handleDragComplete]);
+
+  // Live Auto-Trace starlight trajectory from activeNode to current hand pointer
+  const wandDrawingPath = useMemo(() => {
+    if (
+      !pointer ||
+      !activeNode ||
+      winFlybyProgress !== null ||
+      hasEndedRef.current ||
+      (controlMode !== 'wand' && controlMode !== 'hybrid')
+    ) {
+      return [];
+    }
+    const originPos = toScreenNorm(activeNode.x, activeNode.y);
+    return [originPos, { x: pointer.x, y: pointer.y }];
+  }, [pointer, activeNode, winFlybyProgress, controlMode]);
 
   // Accumulate wand distance
   useEffect(() => {
@@ -535,15 +613,21 @@ export default function ChallengeScreen({
     layerOpacity = easeOut;
   }
 
-  // Admin Controls Testing State
-  const [controlMode, setControlMode] = useState('hybrid'); // 'mouse' | 'wand' | 'hybrid'
-  const [showCamPip, setShowCamPip] = useState(false);
-  const [showAdminHud, setShowAdminHud] = useState(true);
+  const activeDrawingPath =
+    winFlybyProgress !== null || hasEndedRef.current
+      ? []
+      : controlMode === 'mouse'
+      ? mouseDrawingPath
+      : (wandDrawingPath.length > 0 ? wandDrawingPath : mouseDrawingPath);
 
   const activePointer =
-    controlMode === 'mouse' ? mouseWand
-    : controlMode === 'wand' ? (snappedPointer || pointer)
-    : (mouseWand || snappedPointer || pointer);
+    controlMode === 'mouse'
+      ? (winFlybyProgress !== null || hasEndedRef.current ? { ...mouseWand, isDrawing: false } : mouseWand)
+      : {
+          x: snappedPointer?.x ?? pointer?.x ?? 0.5,
+          y: snappedPointer?.y ?? pointer?.y ?? 0.5,
+          isDrawing: Boolean(activeNode && pointer && winFlybyProgress === null && !hasEndedRef.current),
+        };
 
   return (
     <div className="screen screen--challenge">
@@ -571,123 +655,6 @@ export default function ChallengeScreen({
         }}
       />
 
-      {/* Admin Testing Controls HUD Pill (Top Center) */}
-      {winFlybyProgress === null && showAdminHud && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 14,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: 'rgba(11, 15, 28, 0.88)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(129, 140, 248, 0.35)',
-            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.2)',
-            borderRadius: 30,
-            padding: '6px 14px',
-            fontSize: 12,
-            fontFamily: "'Outfit', sans-serif",
-            color: '#f8fafc',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{ fontWeight: 800, color: '#818cf8', letterSpacing: 1 }}>⚙️ INPUT:</span>
-          
-          <button
-            onClick={() => setControlMode('mouse')}
-            style={{
-              background: controlMode === 'mouse' ? '#6366f1' : 'rgba(255,255,255,0.06)',
-              color: controlMode === 'mouse' ? '#fff' : '#94a3b8',
-              border: 'none',
-              borderRadius: 20,
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            🖱️ Mouse
-          </button>
-
-          <button
-            onClick={() => setControlMode('wand')}
-            style={{
-              background: controlMode === 'wand' ? '#6366f1' : 'rgba(255,255,255,0.06)',
-              color: controlMode === 'wand' ? '#fff' : '#94a3b8',
-              border: 'none',
-              borderRadius: 20,
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            🪄 Motion Wand
-          </button>
-
-          <button
-            onClick={() => setControlMode('hybrid')}
-            style={{
-              background: controlMode === 'hybrid' ? '#6366f1' : 'rgba(255,255,255,0.06)',
-              color: controlMode === 'hybrid' ? '#fff' : '#94a3b8',
-              border: 'none',
-              borderRadius: 20,
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            ⚡ Hybrid
-          </button>
-
-          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.15)' }} />
-
-          {/* Webcam PIP Toggle Button */}
-          <button
-            onClick={() => setShowCamPip((prev) => !prev)}
-            style={{
-              background: showCamPip ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.06)',
-              color: showCamPip ? '#4ade80' : '#94a3b8',
-              border: showCamPip ? '1px solid #4ade80' : '1px solid transparent',
-              borderRadius: 20,
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            📷 {showCamPip ? 'Hide Cam' : 'Show Cam'}
-          </button>
-
-          {/* Live Gesture Tracking Status Badge */}
-          <span
-            style={{
-              background: pointer ? 'rgba(74, 222, 128, 0.15)' : 'rgba(248, 113, 113, 0.15)',
-              color: pointer ? '#4ade80' : '#f87171',
-              border: `1px solid ${pointer ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`,
-              borderRadius: 12,
-              padding: '3px 8px',
-              fontSize: 10,
-              fontWeight: 700,
-            }}
-          >
-            {pointer ? `🟢 Hand Active · ${gestureStatus}` : '🔴 No Hand in Frame'}
-          </span>
-        </div>
-      )}
-
       {/* Main Presentation Layer */}
       <ConstellationLayer
         stars={[...starNodes, ...fakeNodes]}
@@ -695,7 +662,7 @@ export default function ChallengeScreen({
         validGuideSegments={validGuideSegments}
         wandPointer={activePointer}
         activeStarId={activeNode?.id}
-        drawingPath={drawingPath}
+        drawingPath={activeDrawingPath}
         snapEffect={snapEffect}
         opacity={layerOpacity}
         scale={layerScale}

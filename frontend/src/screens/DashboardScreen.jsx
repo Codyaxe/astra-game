@@ -57,7 +57,13 @@ function Starfield() {
   );
 }
 
-export default function Dashboard({ onBack, onLaunchChallenge, constellations = [] }) {
+export default function Dashboard({
+  onBack,
+  onLaunchChallenge,
+  constellations = [],
+  gameSettings = { controlMode: 'hybrid', showCamPip: false },
+  onUpdateSettings = () => {},
+}) {
   const [activeTab, setActiveTab] = useState("lab"); // "database" | "lab"
   const [registrations, setRegistrations] = useState([]);
   const [search, setSearch] = useState("");
@@ -66,7 +72,8 @@ export default function Dashboard({ onBack, onLaunchChallenge, constellations = 
   const [activeTicket, setActiveTicket] = useState(null);
 
   // Motion Capture Lab State
-  const [labControlMode, setLabControlMode] = useState("hybrid"); // "mouse" | "wand" | "hybrid"
+  const labControlMode = gameSettings.controlMode || 'hybrid';
+  const setLabControlMode = (mode) => onUpdateSettings({ controlMode: mode });
   const [selectedConstellationIdx, setSelectedConstellationIdx] = useState(0);
   const [labConnections, setLabConnections] = useState([]);
   const [labDrawingFrom, setLabDrawingFrom] = useState(null);
@@ -75,10 +82,10 @@ export default function Dashboard({ onBack, onLaunchChallenge, constellations = 
 
   // Practice Star Nodes on Lab Canvas
   const testStars = useMemo(() => [
-    { id: 1, label: "Star Alpha", x: 0.25, y: 0.3 },
-    { id: 2, label: "Star Beta", x: 0.75, y: 0.28 },
-    { id: 3, label: "Star Gamma", x: 0.8, y: 0.75 },
-    { id: 4, label: "Star Delta", x: 0.28, y: 0.72 },
+    { id: 1, label: "Star Alpha", x: 0.25, y: 0.3, screenX: 0.25, screenY: 0.3 },
+    { id: 2, label: "Star Beta", x: 0.75, y: 0.28, screenX: 0.75, screenY: 0.28 },
+    { id: 3, label: "Star Gamma", x: 0.8, y: 0.75, screenX: 0.8, screenY: 0.75 },
+    { id: 4, label: "Star Delta", x: 0.28, y: 0.72, screenX: 0.28, screenY: 0.72 },
   ], []);
 
   // Motion Capture Wand Hook
@@ -492,32 +499,54 @@ export default function Dashboard({ onBack, onLaunchChallenge, constellations = 
               )}
             </div>
 
-            {/* Input Mode Selector */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(15,23,42,0.6)", padding: "10px 14px", borderRadius: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Active Test Mode:</span>
-              <div style={{ display: "flex", gap: 6 }}>
-                {[
-                  { id: "mouse", label: "🖱️ Mouse / Touch" },
-                  { id: "wand", label: "🪄 Motion Capture" },
-                  { id: "hybrid", label: "⚡ Hybrid Both" },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setLabControlMode(m.id)}
-                    style={{
-                      background: labControlMode === m.id ? colors.accent : "rgba(255,255,255,0.06)",
-                      color: labControlMode === m.id ? "#fff" : colors.textDim,
-                      border: "none",
-                      borderRadius: 8,
-                      padding: "6px 12px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+            {/* Input Mode & Settings Selector */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(15,23,42,0.6)", padding: "12px 14px", borderRadius: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Global Input Control:</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[
+                    { id: "mouse", label: "🖱️ Mouse / Touch" },
+                    { id: "wand", label: "🪄 Motion Wand" },
+                    { id: "hybrid", label: "⚡ Hybrid Both" },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setLabControlMode(m.id)}
+                      style={{
+                        background: labControlMode === m.id ? colors.accent : "rgba(255,255,255,0.06)",
+                        color: labControlMode === m.id ? "#fff" : colors.textDim,
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>In-Game Camera Preview (PIP):</span>
+                <button
+                  onClick={() => onUpdateSettings({ showCamPip: !gameSettings.showCamPip })}
+                  style={{
+                    background: gameSettings.showCamPip ? "rgba(74, 222, 128, 0.2)" : "rgba(255,255,255,0.06)",
+                    color: gameSettings.showCamPip ? "#4ade80" : colors.textDim,
+                    border: `1px solid ${gameSettings.showCamPip ? "rgba(74, 222, 128, 0.4)" : "transparent"}`,
+                    borderRadius: 8,
+                    padding: "5px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  📷 {gameSettings.showCamPip ? "ENABLED (Visible in gameplay)" : "DISABLED (Hidden in gameplay)"}
+                </button>
               </div>
             </div>
           </div>

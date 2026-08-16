@@ -97,6 +97,28 @@ export default function App() {
 
   const [isStageWarping, setIsStageWarping] = useState(false);
 
+  // Global Admin Settings (Control Mode & Webcam Preview)
+  const [gameSettings, setGameSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('astra_game_settings');
+      return saved ? JSON.parse(saved) : { controlMode: 'hybrid', showCamPip: false };
+    } catch {
+      return { controlMode: 'hybrid', showCamPip: false };
+    }
+  });
+
+  const handleUpdateSettings = useCallback((newSettings) => {
+    setGameSettings((prev) => {
+      const updated = { ...prev, ...newSettings };
+      try {
+        localStorage.setItem('astra_game_settings', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  }, []);
+
   const handleChallengeComplete = useCallback((result) => {
     setIsStageWarping(false);
     setLastAttemptResult(result || { isWin: true, score: 95 });
@@ -234,6 +256,8 @@ export default function App() {
         <DashboardScreen
           onBack={() => setScreen('title')}
           constellations={constellations}
+          gameSettings={gameSettings}
+          onUpdateSettings={handleUpdateSettings}
           onLaunchChallenge={(stageIdx = 0) => {
             const adminPlayer = {
               id: 9999,
@@ -273,6 +297,8 @@ export default function App() {
           constellationIndex={constellationIndex}
           totalConstellations={constellations.length}
           attemptNumber={attemptNumber}
+          controlMode={gameSettings.controlMode}
+          showCamPip={gameSettings.showCamPip}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}

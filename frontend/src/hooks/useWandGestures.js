@@ -84,19 +84,25 @@ export function useWandGestures({
 
       lastValidPointerRef.current = smoothedPoint;
       lastValidTimeRef.current = now;
-      setPointer({ x: smoothedPoint.x, y: smoothedPoint.y, z: smoothedPoint.z });
+      setPointer({
+        x: smoothedPoint.x,
+        y: smoothedPoint.y,
+        z: smoothedPoint.z,
+        isDrawing: drawRef.current,
+      });
     }
 
-    // Forward / Back Tilt (Draw Line State Machine)
-    if (isForwardTilt && !holdRef.current && now - lastActionTimeRef.current > 300) {
+    // Forward Tilt / Pinch to Draw State Machine
+    const isDrawingGesture = detection.isDrawing;
+    if (isDrawingGesture && !holdRef.current && now - lastActionTimeRef.current > 180) {
       holdRef.current = true;
       drawRef.current = true;
       lastActionTimeRef.current = now;
       setOnHold(true);
       setOnDraw(true);
-      setGestureStatus('Drawing (Tilt Forward)');
-    } else if (isNeutralTilt && holdRef.current && now - lastActionTimeRef.current > 250) {
-      // Completed tilt -> untilt cycle: registers 1 deliberate click
+      setGestureStatus(detection.isPinching ? 'Drawing (Pinch)' : 'Drawing (Tilt Forward)');
+    } else if (detection.isNeutralTilt && holdRef.current && now - lastActionTimeRef.current > 200) {
+      // Completed tilt -> untilt cycle: registers 1 deliberate connection snap
       holdRef.current = false;
       drawRef.current = false;
       lastActionTimeRef.current = now;
@@ -104,7 +110,7 @@ export function useWandGestures({
       setOnDraw(false);
       setGestureStatus('Connected (Cycle Completed)');
       onCompleteRef.current?.();
-      setTimeout(() => setGestureStatus('Neutral'), 600);
+      setTimeout(() => setGestureStatus('Neutral'), 500);
     }
   }, []);
 
