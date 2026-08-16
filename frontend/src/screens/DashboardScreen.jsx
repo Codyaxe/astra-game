@@ -120,7 +120,8 @@ export default function Dashboard({
       const res = await fetch(`${BACKEND_URL}/registrations`);
       if (!res.ok) throw new Error("Failed to fetch data");
       const data = await res.json();
-      setRegistrations(data);
+      const list = Array.isArray(data) ? data : (data?.registrations || []);
+      setRegistrations(list);
     } catch (err) {
       setError("Failed to load registrations. Is the backend running?");
     } finally {
@@ -192,7 +193,8 @@ export default function Dashboard({
     setLabDrawingFrom(null);
   };
 
-  const filtered = registrations.filter((r) => {
+  const regList = Array.isArray(registrations) ? registrations : [];
+  const filtered = regList.filter((r) => {
     const term = search.toLowerCase();
     return (
       r.first_name?.toLowerCase().includes(term) ||
@@ -732,19 +734,19 @@ export default function Dashboard({
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Magnetic Snapping Radius:</div>
-                    <div style={{ fontSize: 10, color: colors.textDim }}>Increase star hitbox size for easier wand/mouse connection</div>
+                    <div style={{ fontSize: 10, color: colors.textDim }}>Adjust star hitbox size (decrease for precision / increase for easy reach)</div>
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 800, color: colors.gold, background: "rgba(244, 213, 141, 0.15)", padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(244, 213, 141, 0.3)" }}>
-                    {((gameSettings.snappingRadiusMultiplier || 1.0) * 100).toFixed(0)}% ({((gameSettings.snappingRadiusMultiplier || 1.0)).toFixed(1)}x)
+                    {((gameSettings.snappingRadiusMultiplier || 1.0) * 100).toFixed(0)}% ({((gameSettings.snappingRadiusMultiplier || 1.0)).toFixed(2)}x)
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 10, color: colors.textDim }}>1.0x (Default)</span>
+                  <span style={{ fontSize: 10, color: colors.textDim }}>0.2x (Ultra Precise / Hard)</span>
                   <input
                     type="range"
-                    min="0.8"
+                    min="0.2"
                     max="2.5"
-                    step="0.1"
+                    step="0.05"
                     value={gameSettings.snappingRadiusMultiplier || 1.0}
                     onChange={(e) => onUpdateSettings({ snappingRadiusMultiplier: parseFloat(e.target.value) })}
                     style={{
@@ -900,26 +902,52 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Constellation Stage Selector */}
+              {/* Constellation Stage Selector & Test Launch */}
               {constellations.length > 0 && (
                 <div style={{ marginTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: colors.textDim, marginBottom: 6 }}>
-                    SELECT CONSTELLATION CHALLENGE STAGE:
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: colors.textDim }}>
+                      SELECT CONSTELLATION CHALLENGE STAGE:
+                    </div>
+                    {constellations[selectedConstellationIdx] && onLaunchChallenge && (
+                      <button
+                        onClick={() => onLaunchChallenge(selectedConstellationIdx, null, constellations[selectedConstellationIdx])}
+                        style={{
+                          background: colors.success,
+                          color: "#030712",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "6px 14px",
+                          fontSize: 11,
+                          fontWeight: 900,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          boxShadow: "0 0 15px rgba(74, 222, 128, 0.4)",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <Play size={13} fill="#030712" /> TEST {constellations[selectedConstellationIdx]?.name?.toUpperCase()} NOW
+                      </button>
+                    )}
                   </div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {constellations.map((c, idx) => (
                       <button
                         key={c.id || idx}
                         onClick={() => setSelectedConstellationIdx(idx)}
+                        onDoubleClick={() => onLaunchChallenge && onLaunchChallenge(idx, null, c)}
                         style={{
                           background: selectedConstellationIdx === idx ? colors.accent : "rgba(255,255,255,0.06)",
                           color: selectedConstellationIdx === idx ? "#fff" : colors.textDim,
-                          border: "none",
+                          border: selectedConstellationIdx === idx ? `1px solid ${colors.cyan}` : "1px solid transparent",
                           borderRadius: 8,
-                          padding: "5px 10px",
+                          padding: "6px 12px",
                           fontSize: 11,
                           fontWeight: 700,
                           cursor: "pointer",
+                          transition: "all 0.15s ease",
                         }}
                       >
                         #{idx + 1} {c.name}

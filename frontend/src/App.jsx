@@ -450,7 +450,7 @@ export default function App() {
           constellations={constellations}
           gameSettings={gameSettings}
           onUpdateSettings={handleUpdateSettings}
-          onLaunchChallenge={(stageIdx = 0, customPlayer = null) => {
+          onLaunchChallenge={(stageIdx = 0, customPlayer = null, specificConstellation = null) => {
             const playerToLaunch = customPlayer || {
               id: 9999,
               first_name: 'Admin',
@@ -462,11 +462,27 @@ export default function App() {
               best_score: 0,
             };
             setPlayer(playerToLaunch);
-            const rem = customPlayer?.attempts_used !== undefined ? Math.max(0, 3 - customPlayer.attempts_used) : 3;
-            setAttemptNumber(Math.max(1, 4 - rem));
+            setAttemptNumber(1);
             setSessionStageScores([]);
-            generateSessionPlaylist();
-            setConstellationIndex(stageIdx);
+            setSessionTelemetry({
+              total_time_sec: 0,
+              total_travel_dist_cm: 0,
+              total_wrong_attempts: 0,
+              stage_count: 0,
+            });
+
+            if (specificConstellation) {
+              setSessionPlaylist([specificConstellation]);
+              setConstellationIndex(0);
+              console.log('%c[ASTRA] 🚀 Admin testing specific constellation:', 'color: #4ade80; font-weight: bold;', specificConstellation.name);
+            } else if (typeof stageIdx === 'number' && constellations[stageIdx]) {
+              setSessionPlaylist([constellations[stageIdx]]);
+              setConstellationIndex(0);
+              console.log('%c[ASTRA] 🚀 Admin testing constellation at index:', 'color: #4ade80; font-weight: bold;', constellations[stageIdx].name);
+            } else {
+              generateSessionPlaylist(true);
+              setConstellationIndex(0);
+            }
             setScreen('challenge');
           }}
         />
