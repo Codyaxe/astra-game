@@ -86,43 +86,39 @@ def get_player_by_ticket(qr_ticket_code: str) -> dict | None:
  
 def increment_attempt_and_update_best_score(player_id: int, new_score: float) -> dict:
     """
-    Update best_score and total_attempts_used by dynamically calculating averages 
-    across all constellations in the database.
+    Update best_score and total_attempts_used for the player.
     """
     rows = execute("SELECT * FROM players WHERE id = %s", (player_id,))
     if not rows:
         raise ValueError("Player not found")
 
     player = rows[0]
-    current_best = float(player["best_score"])
+    current_best = float(player.get("best_score") or 0.0)
 
-    # 1. Fetch total constellations count in the database
-    const_count_row = execute("SELECT COUNT(*) as count FROM constellations")
-    total_constellations = max(1, const_count_row[0]["count"] if const_count_row else 1)
-
-    # 2. Fetch sum of scores grouped by attempt_number for this player
+    # 1. Fetch scores grouped by attempt_number for this player
     avg_query = """
-        SELECT attempt_number, SUM(score) as total_score
+        SELECT attempt_number, SUM(score) as total_score, COUNT(*) as stages_count
         FROM game_sessions
         WHERE player_id = %s
         GROUP BY attempt_number
     """
     attempt_sums = execute(avg_query, (player_id,))
 
-    # 3. Calculate max average score and maximum attempt number
-    best_avg = 0.0
-    attempts_used = 0
+    best_score = max(current_best, float(new_score or 0.0))
+    attempts_used = player.get("total_attempts_used", 0)
+
     for attempt in attempt_sums:
-        att_num = attempt["attempt_number"]
-        avg = float(attempt["total_score"]) / total_constellations
-        if avg > best_avg:
-            best_avg = avg
+        att_num = attempt.get("attempt_number") or 1
+        stages_count = max(1, attempt.get("stages_count") or 1)
+        avg = float(attempt.get("total_score") or 0.0) / stages_count
+        if avg > best_score:
+            best_score = avg
         if att_num > attempts_used:
             attempts_used = att_num
 
     # Ensure attempts_used is sensible and capped
-    attempts_used = min(MAX_ATTEMPTS, max(attempts_used, player["total_attempts_used"]))
-    best_avg = round(best_avg, 2)
+    attempts_used = min(MAX_ATTEMPTS, max(attempts_used, player.get("total_attempts_used", 0), 1))
+    best_score = round(best_score, 1)
 
     execute(
         """
@@ -131,7 +127,7 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
             best_score = %s
         WHERE id = %s
         """,
-        (attempts_used, best_avg, player_id),
+        (attempts_used, best_score, player_id),
         commit=True,
     )
 
@@ -139,8 +135,8 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
         "player_id": player_id,
         "attempts_used": attempts_used,
         "attempts_remaining": max(0, MAX_ATTEMPTS - attempts_used),
-        "best_score": best_avg,
-        "is_new_high_score": best_avg > current_best,
+        "best_score": best_score,
+        "is_new_high_score": best_score > current_best,
     }
 
 

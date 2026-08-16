@@ -245,7 +245,7 @@ export default function ScoreOverlay({
         {/* Score & Outcome Rank Banner */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ fontSize: '1.25rem', fontWeight: 800, color: themeColor, letterSpacing: '2px', marginBottom: '6px', textShadow: `0 0 10px ${themeColor}` }}>
-            SCORE: {typeof score === 'number' ? `${score}%` : score}
+            SCORE: {score} PTS
           </div>
           <div style={{ fontSize: '1.05rem', color: '#E2E8F0', fontWeight: 600 }}>
             {isWin ? (

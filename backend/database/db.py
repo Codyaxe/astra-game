@@ -71,7 +71,17 @@ def get_leaderboard(limit: int = 10):
     source of truth and is already updated whenever a session beats it.
     """
     query = """
-        SELECT id, first_name, last_name, sr_code, course, best_score
+        SELECT 
+            id,
+            id AS player_id,
+            first_name, 
+            last_name, 
+            sr_code, 
+            course, 
+            department,
+            total_attempts_used AS attempts_used,
+            best_score,
+            best_score AS highest_score
         FROM players
         WHERE best_score > 0
         ORDER BY best_score DESC
