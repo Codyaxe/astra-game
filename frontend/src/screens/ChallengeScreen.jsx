@@ -49,23 +49,53 @@ export default function ChallengeScreen({
   const wandTravelDistRef = useRef(0);
   const prevPointerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
+  const hasEndedRef = useRef(false);
   const { activeSubtitle, playLine, playSequence, stopDialogue } = useDialogueController();
   const hasPlayed20sRef = useRef(false);
   const hasPlayed10sRef = useRef(false);
+
+  // Instantiate linked list model
+  const constellationList = useMemo(() => {
+    return constellationData ? new ConstellationLinkedList(constellationData) : null;
+  }, [constellationData]);
+
+  // Timer expiration handler (forward declared via ref to avoid circular dependency)
+  const timerExpireRef = useRef(null);
+  const timeLimit = constellationList?.timeLimitSec || 30;
+  const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, (elapsed) => {
+    if (timerExpireRef.current) timerExpireRef.current(elapsed);
+  });
 
   // Win Fly-by 3D Expansion & Turn Animation State (3.6s duration)
   const [winFlybyProgress, setWinFlybyProgress] = useState(null);
 
   const startWinDialogue = useCallback((winResult) => {
+    console.log('%c[ASTRA DIAGNOSTIC] 🎙️ startWinDialogue called with result:', 'color: #38bdf8; font-weight: bold;', winResult);
+
+    // Timeout safety fallback: guarantee win screen transitions even if dialogue audio stalls
+    let safetyFired = false;
+    const safetyTimer = setTimeout(() => {
+      if (!safetyFired) {
+        safetyFired = true;
+        console.log('%c[ASTRA DIAGNOSTIC] ⚡ Safety Timer triggered -> Transitioning to Win Score Overlay!', 'color: #facc15; font-weight: bold;');
+        onComplete?.(winResult);
+      }
+    }, 7000);
+
     playSequence(
       DIALOGUE_CONFIG.phaseEWin,
       () => {
-        // Line E3 finished -> mount Win Overlay
-        onComplete?.(winResult);
+        if (!safetyFired) {
+          safetyFired = true;
+          clearTimeout(safetyTimer);
+          console.log('%c[ASTRA DIAGNOSTIC] 🏁 Phase E Dialogue finished -> Transitioning to Win Score Overlay!', 'color: #4ade80; font-weight: bold;');
+          onComplete?.(winResult);
+        }
       },
       (line) => {
+        console.log('%c[ASTRA DIAGNOSTIC] 🗣️ Playing Win Dialogue Line:', 'color: #a78bfa;', line.id, line.text);
         if (line.triggers3DTurn) {
-          // Line E2 ("Heading locked"): start 3D turn animation!
+          console.log('%c[ASTRA DIAGNOSTIC] 🌀 Line triggers 3D Constellation Turn Animation!', 'color: #fbbf24; font-weight: bold;');
           onWinStart?.();
           setWinFlybyProgress(0);
           let start = null;
@@ -84,11 +114,6 @@ export default function ChallengeScreen({
       }
     );
   }, [playSequence, onWinStart, onComplete]);
-
-  // Instantiate linked list model
-  const constellationList = useMemo(() => {
-    return constellationData ? new ConstellationLinkedList(constellationData) : null;
-  }, [constellationData]);
 
   const starNodes = useMemo(() => {
     const listStars = constellationList?.getAllStarNodes() || [];
@@ -157,7 +182,19 @@ export default function ChallengeScreen({
 
         // Check if finished full constellation
         const requiredCount = validGuideSegments.length > 0 ? validGuideSegments.length : starNodes.length - 1;
+        console.log('%c[ASTRA DIAGNOSTIC] 🔗 Snap Connection Added!', 'color: #38bdf8;', {
+          from: fromStarId,
+          to: toStarId,
+          connectedCount: updatedConns.length,
+          requiredCount,
+        });
+
         if (updatedConns.length >= requiredCount) {
+          if (hasEndedRef.current) return;
+          hasEndedRef.current = true;
+          stopTimer();
+          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED (Mouse Drag)!', 'color: #4ade80; font-weight: bold;');
+
           const elapsed = Date.now() - startTimeRef.current;
           const elapsedSec = Math.round(elapsed / 100) / 10;
           const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
@@ -260,6 +297,13 @@ export default function ChallengeScreen({
 
   // Timer expiration: Disqualified (Plays Phase D dialogue lines D1 & D2 before eye blink closure)
   const handleTimerExpire = useCallback(async () => {
+    if (hasEndedRef.current) {
+      console.log('%c[ASTRA DIAGNOSTIC] ⏳ Timer Expired after level already finished. Ignoring.', 'color: #94a3b8;');
+      return;
+    }
+    hasEndedRef.current = true;
+    console.log('%c[ASTRA DIAGNOSTIC] ❌ Timer Expired! Starting Fail Dialogue sequence...', 'color: #f87171; font-weight: bold;');
+
     playSfx('timerEnd');
     const elapsed = Date.now() - startTimeRef.current;
     const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
@@ -291,12 +335,12 @@ export default function ChallengeScreen({
 
     // Play Phase D Fail Dialogue (D1 "That's not a match..." -> D2 "Brace, brace, BRA—") -> Eye Blink / Fail
     playSequence(DIALOGUE_CONFIG.phaseDFail, () => {
+      console.log('%c[ASTRA DIAGNOSTIC] 💀 Phase D Fail Dialogue finished -> Calling onDisqualified()', 'color: #f87171;');
       onDisqualified?.(failResult);
     });
   }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onDisqualified, playSequence]);
 
-  const timeLimit = constellationList?.timeLimitSec || 30;
-  const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, handleTimerExpire);
+  timerExpireRef.current = handleTimerExpire;
 
   // Trigger Phase C Dialogue Warnings at 20s left and 10s left
   useEffect(() => {
@@ -330,9 +374,17 @@ export default function ChallengeScreen({
       setCompletedConnections(updatedConns);
       setActiveNode(targetNode);
 
+      console.log('%c[ASTRA DIAGNOSTIC] 🔗 Wand Gesture Connection Step:', 'color: #38bdf8;', {
+        connectedCount: updatedConns.length,
+        requiredCount: constellationList.getTotalRequiredConnections(),
+      });
+
       // Check if finished full constellation
       if (updatedConns.length >= constellationList.getTotalRequiredConnections()) {
+        if (hasEndedRef.current) return;
+        hasEndedRef.current = true;
         stopTimer();
+        console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED (Wand Gesture)!', 'color: #4ade80; font-weight: bold;');
         const elapsed = Date.now() - startTimeRef.current;
         const elapsedSec = Math.round(elapsed / 100) / 10;
         const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
@@ -492,7 +544,7 @@ export default function ChallengeScreen({
       )}
 
       {/* Gameplay Subtitle Overlay */}
-      <SubtitleOverlay subtitle={dialogue.activeSubtitle} />
+      <SubtitleOverlay subtitle={activeSubtitle} />
     </div>
   );
 }

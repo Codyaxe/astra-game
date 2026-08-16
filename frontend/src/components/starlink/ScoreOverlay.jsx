@@ -15,6 +15,7 @@ export default function ScoreOverlay({
   telemetry = null,
   rankPlacement = 1,
   remainingAttempts = 2,
+  continueLabel = null,
   onTryAgain = null,
   onContinue = null,
   onRestart = null,
@@ -298,7 +299,16 @@ export default function ScoreOverlay({
           {/* Button 2: CONTINUE / RETURN TO BASE */}
           {(onContinue || onRestart) && (
             <button
-              onClick={onContinue || onRestart}
+              onClick={() => {
+                console.log('%c[ASTRA DIAGNOSTIC] 🖱️ ScoreOverlay Button 2 Clicked!', 'color: #38bdf8; font-weight: bold;', {
+                  isWin,
+                  continueLabel,
+                  hasOnContinue: !!onContinue,
+                  hasOnRestart: !!onRestart,
+                });
+                if (onContinue) onContinue();
+                else if (onRestart) onRestart();
+              }}
               style={{
                 width: '100%',
                 padding: '12px 24px',
@@ -326,7 +336,7 @@ export default function ScoreOverlay({
                 e.currentTarget.style.textShadow = `0 0 8px ${themeColor}`;
               }}
             >
-              {onRestart ? 'RETURN TO BASE' : 'CONTINUE ⮞'}
+              {continueLabel || (onRestart ? 'RETURN TO BASE' : (isWin ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆'))}
             </button>
           )}
         </div>

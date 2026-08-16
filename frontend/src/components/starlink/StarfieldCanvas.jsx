@@ -105,9 +105,6 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
       impactTimeRef.current = null;
       crackLinesRef.current = [];
       embersRef.current = [];
-      if (!animFrameRef.current) {
-        animFrameRef.current = requestAnimationFrame(render);
-      }
     }
 
     if (state === 'impact' && !impactTimeRef.current) {
@@ -219,7 +216,10 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
     const cy = () => canvas.height / 2;
 
     function render() {
-      if (isFrozenRef.current) return;
+      if (isFrozenRef.current) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
 
       const w = canvas.width;
       const h = canvas.height;

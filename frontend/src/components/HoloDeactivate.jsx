@@ -69,9 +69,9 @@ export default function HoloDeactivate({
       aria-hidden={phase === 'done' || phase === 'flash' ? true : undefined}
     >
       {children}
-      <div className="holo-deactivate__scanlines" aria-hidden="true" />
+      <div className="holo-deactivate__scanlines" style={{ pointerEvents: 'none' }} aria-hidden="true" />
       {phase === 'flash' && (
-        <div className="holo-deactivate__flash-bar" aria-hidden="true" />
+        <div className="holo-deactivate__flash-bar" style={{ pointerEvents: 'none' }} aria-hidden="true" />
       )}
     </div>
   );

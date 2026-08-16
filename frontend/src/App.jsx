@@ -254,18 +254,26 @@ export default function App() {
           isWin={screen === 'challenge_win_score'}
           player={player}
           remainingAttempts={Math.max(0, 3 - attemptNumber)}
+          continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < constellations.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
           isExiting={isScoreExiting}
           onTryAgain={attemptNumber < 3 ? handleRetryNextAttempt : null}
           onContinue={() => {
+            console.log('%c[ASTRA DIAGNOSTIC] 🚀 App.jsx onContinue triggered!', 'color: #4ade80; font-weight: bold;', {
+              currentScreen: screen,
+              constellationIndex,
+              totalConstellations: constellations.length,
+              player,
+              lastAttemptResult,
+            });
             if (screen === 'challenge_fail') {
-              // Disqualified / Failed -> Direct to Leaderboard!
+              console.log('%c[ASTRA DIAGNOSTIC] ➡️ Navigating directly to LEADERBOARD (Failure/Disqualified)', 'color: #f87171; font-weight: bold;');
               setScreen('leaderboard');
             } else if (constellationIndex + 1 < constellations.length) {
-              // Solved stage -> Proceed to next constellation!
+              console.log('%c[ASTRA DIAGNOSTIC] ➡️ Advancing to next constellation stage index:', 'color: #facc15; font-weight: bold;', constellationIndex + 1);
               setConstellationIndex((idx) => idx + 1);
               setScreen('challenge');
             } else {
-              // Completed all constellations -> Leaderboard!
+              console.log('%c[ASTRA DIAGNOSTIC] ➡️ Solved all constellations -> Navigating to LEADERBOARD', 'color: #4ade80; font-weight: bold;');
               setScreen('leaderboard');
             }
           }}
