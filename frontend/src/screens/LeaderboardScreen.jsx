@@ -342,7 +342,7 @@ export default function LeaderboardScreen({ player, lastAttemptResult, attemptNu
 
         {/* Actions */}
         <div className="lb-actions">
-          {attemptsRemaining > 0 && onRetry && (
+          {Boolean(player && attemptsRemaining > 0 && onRetry) && (
             <button className="btn-submit" onClick={onRetry}>
               🔄 Use Next Attempt ({attemptsRemaining} remaining)
             </button>

@@ -555,7 +555,7 @@ export default function App() {
           player={player}
           lastAttemptResult={lastAttemptResult}
           attemptNumber={attemptNumber}
-          onRetry={attemptNumber < 3 ? handleRestartNewSession : null}
+          onRetry={Boolean(player && attemptNumber < 3) ? handleRestartNewSession : null}
           onReturnToTitle={handleReturnToTitle}
         />
       )}
