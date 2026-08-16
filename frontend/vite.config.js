@@ -9,9 +9,14 @@ export default defineConfig({
     // Proxy API calls to the Flask backend during development
     proxy: {
       '/api': {
-        target: 'http://localhost:5005',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/testSetup.js',
   },
 })

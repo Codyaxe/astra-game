@@ -12,6 +12,47 @@ import { useRef, useEffect, useCallback } from 'react';
 const STAR_VISUAL_RADIUS = 12;
 const FAKE_STAR_RADIUS = 8;
 
+
+// !subject to change to assets
+function drawStarburst(ctx, {
+  x,
+  y,
+  rays,
+  outerRadius,
+  innerRadius,
+  rotation = 0,
+  fillStyle = '#fef08a',
+  strokeStyle = null,
+  strokeWidth = 1,
+}) {
+  const points = Math.max(4, Math.round(rays));
+  const step = Math.PI / points;
+
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+    const angle = rotation + i * step;
+    const px = x + Math.cos(angle) * radius;
+    const py = y + Math.sin(angle) * radius;
+
+    if (i === 0) {
+      ctx.moveTo(px, py);
+    } else {
+      ctx.lineTo(px, py);
+    }
+  }
+  ctx.closePath();
+
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+
+  if (strokeStyle) {
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = strokeStyle;
+    ctx.stroke();
+  }
+}
+
 export default function ConstellationCanvas({
   starNodes = [],
   fakeNodes = [],
@@ -24,11 +65,25 @@ export default function ConstellationCanvas({
   height,
 }) {
   const canvasRef = useRef(null);
+  const starStyleRef = useRef(new Map());
+
+  useEffect(() => {
+    const styleMap = new Map();
+    for (const node of starNodes) {
+      styleMap.set(node.id, {
+        rays: 5 + Math.floor(Math.random() * 4), // 5..8 rays, fixed per star for this round
+        rotationOffset: Math.random() * Math.PI * 2,
+        twinklePhase: Math.random() * Math.PI * 2,
+      });
+    }
+    starStyleRef.current = styleMap;
+  }, [starNodes]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const t = performance.now();
     ctx.clearRect(0, 0, width, height);
 
     // 1. Draw Validated Completed Connections
@@ -62,18 +117,35 @@ export default function ConstellationCanvas({
     for (const fake of fakeNodes) {
       const fx = fake.x * width;
       const fy = fake.y * height;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.beginPath();
-      ctx.arc(fx, fy, FAKE_STAR_RADIUS, 0, Math.PI * 2);
-      ctx.fill();
+      const fakeTwinkle = 0.85 + 0.15 * Math.sin(t * 0.003 + fake.id * 0.5);
+
+      drawStarburst(ctx, {
+        x: fx,
+        y: fy,
+        rays: 4,
+        outerRadius: FAKE_STAR_RADIUS * fakeTwinkle,
+        innerRadius: FAKE_STAR_RADIUS * 0.4,
+        rotation: (t * 0.0005) + fake.id,
+        fillStyle: 'rgba(255, 255, 255, 0.3)',
+      });
     }
 
     // 4. Draw Real Star Nodes
     for (const node of starNodes) {
       const nx = node.x * width;
       const ny = node.y * height;
-      const hitboxPx = (node.hitbox_radius || 0.025) * Math.min(width, height);
+      const hitboxPx = (node.hitbox_radius || 0.055) * Math.min(width, height);
       const isActive = activeNode?.id === node.id;
+      const style = starStyleRef.current.get(node.id) || {
+        rays: 6,
+        rotationOffset: 0,
+        twinklePhase: 0,
+      };
+      const rays = style.rays;
+      const twinkle = 0.9 + 0.16 * Math.sin(t * 0.004 + style.twinklePhase);
+      const outerRadius = STAR_VISUAL_RADIUS * (isActive ? 1.28 : 1.1) * twinkle;
+      const innerRadius = STAR_VISUAL_RADIUS * (isActive ? 0.44 : 0.5) * twinkle;
+      const starRotation = (t * 0.0008) + style.rotationOffset;
 
       // Extended Hitbox ring (subtle guide)
       ctx.strokeStyle = isActive ? 'rgba(108, 99, 255, 0.4)' : 'rgba(255, 255, 255, 0.06)';
@@ -91,10 +163,23 @@ export default function ConstellationCanvas({
       ctx.arc(nx, ny, STAR_VISUAL_RADIUS * 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Core Star
-      ctx.fillStyle = isActive ? '#a78bfa' : '#fef08a';
+      // Starburst core with variable rays
+      drawStarburst(ctx, {
+        x: nx,
+        y: ny,
+        rays,
+        outerRadius,
+        innerRadius,
+        rotation: starRotation,
+        fillStyle: isActive ? '#a78bfa' : '#fef08a',
+        strokeStyle: isActive ? 'rgba(196, 181, 253, 0.95)' : 'rgba(255, 255, 255, 0.75)',
+        strokeWidth: 1,
+      });
+
+      // Hot center point keeps stars readable at a distance
+      ctx.fillStyle = isActive ? '#ddd6fe' : '#fff8cc';
       ctx.beginPath();
-      ctx.arc(nx, ny, STAR_VISUAL_RADIUS, 0, Math.PI * 2);
+      ctx.arc(nx, ny, Math.max(2.2, STAR_VISUAL_RADIUS * 0.2), 0, Math.PI * 2);
       ctx.fill();
 
       // Star Label
@@ -126,7 +211,14 @@ export default function ConstellationCanvas({
   }, [starNodes, fakeNodes, completedConnections, activeNode, wandPointer, snappedPointer, onDraw, width, height]);
 
   useEffect(() => {
-    const frameId = requestAnimationFrame(draw);
+    let frameId;
+
+    const renderFrame = () => {
+      draw();
+      frameId = requestAnimationFrame(renderFrame);
+    };
+
+    frameId = requestAnimationFrame(renderFrame);
     return () => cancelAnimationFrame(frameId);
   }, [draw]);
 

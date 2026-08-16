@@ -1,15 +1,21 @@
 /**
- * ChallengeScreen.jsx â€” Constellation Tracing Gameplay Screen (Clean & Single-Source)
+ * ChallengeScreen.jsx — Constellation Tracing Gameplay Screen
  *
  * Implements:
- * 1. Automatic path-tracing on star glide/hover + click fallback
- * 2. Real-time scoring calculation & HUD display
- * 3. Step validation: Star A -> Star B -> Star C -> Star D
- * 4. Clear console logs and victory celebration with score
+ * 1. Linked-list struct sequence validation (head -> next -> next ...)
+ * 2. Magnetic snapping with extended hitboxes
+ * 3. Forward tilt to draw, untilt to complete/click connection
+ * 4. Left/Right tilt to reset lines
+ * 5. Circle motion to force exit immediately
+ * 6. Shake Up/Down to recalibrate wand tracking
+ * 7. Timer countdown with disqualification on expiry
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import ConstellationCanvas from '../components/ConstellationCanvas';
+import ConstellationLayer from '../components/starlink/ConstellationLayer';
+import WandCursor from '../components/starlink/WandCursor';
+import useMouseWandAdapter from '../hooks/useMouseWandAdapter';
 import HUD from '../components/HUD';
 import { useWandGestures } from '../hooks/useWandGestures';
 import { useGameTimer } from '../hooks/useGameTimer';
@@ -17,419 +23,476 @@ import { ConstellationLinkedList } from '../game/linkedListConstellation';
 import { getMagneticSnap, calculateDistance } from '../game/snapping';
 import { playSfx } from '../utils/audio';
 import { startSession, submitAttempt } from '../services/api';
+import { PLACEHOLDER_STARS } from '../mock/placeholders';
+import SubtitleOverlay from '../components/dialogue/SubtitleOverlay';
+import useDialogueController from '../hooks/useDialogueController';
+import { DIALOGUE_CONFIG } from '../config/dialogueConfig';
 
 export default function ChallengeScreen({
   player,
-  constellation,
   constellationData,
-  constellationIndex = 0,
-  totalConstellations = 1,
   attemptNumber = 1,
+  onWinStart,
   onComplete,
-  onDisqualified,
   onForceExit,
+  onDisqualified,
 }) {
-  const activeConstellation = constellationData || constellation;
   const [sessionId, setSessionId] = useState(null);
   const [completedConnections, setCompletedConnections] = useState([]); // [{ from, to }]
   const [activeNode, setActiveNode] = useState(null);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [solvedScore, setSolvedScore] = useState(null);
   const [dimensions, setDimensions] = useState({ w: window.innerWidth, h: window.innerHeight });
 
   // Telemetry
   const [wrongConnections, setWrongConnections] = useState(0);
   const [totalClicks, setTotalClicks] = useState(0);
-
-  // Atomic state refs
-  const sessionIdRef = useRef(null);
-  const connectionsRef = useRef([]);
-  const activeNodeRef = useRef(null);
-  const wrongRef = useRef(0);
-  const clicksRef = useRef(0);
-  const isCompletedRef = useRef(false);
+  const [recalibrationCount, setRecalibrationCount] = useState(0);
   const wandTravelDistRef = useRef(0);
   const prevPointerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
-  const currentSnappedRef = useRef(null);
-  const lastSnappedNodeIdRef = useRef(null);
-  const sessionStartedRef = useRef(false);
-  // Accuracy tracking: collect pointer positions between each star-to-star connection
-  const tracedPointsRef = useRef([]);          // [{x,y}] for current in-progress segment
-  const connectionAccuraciesRef = useRef([]);  // accuracy per completed connection
-  const [solvedAccuracy, setSolvedAccuracy] = useState(null);
+  const { activeSubtitle, playLine, playSequence, stopDialogue } = useDialogueController();
+  const hasPlayed20sRef = useRef(false);
+  const hasPlayed10sRef = useRef(false);
 
-  // Model
+  // Win Fly-by 3D Expansion & Turn Animation State (3.6s duration)
+  const [winFlybyProgress, setWinFlybyProgress] = useState(null);
+
+  const startWinDialogue = useCallback((winResult) => {
+    playSequence(
+      DIALOGUE_CONFIG.phaseEWin,
+      () => {
+        // Line E3 finished -> mount Win Overlay
+        onComplete?.(winResult);
+      },
+      (line) => {
+        if (line.triggers3DTurn) {
+          // Line E2 ("Heading locked"): start 3D turn animation!
+          onWinStart?.();
+          setWinFlybyProgress(0);
+          let start = null;
+          function animateWinFlyby(timestamp) {
+            if (!start) start = timestamp;
+            const elapsed = timestamp - start;
+            const duration = 3600;
+            const progress = Math.min(1.0, elapsed / duration);
+            setWinFlybyProgress(progress);
+            if (progress < 1.0) {
+              requestAnimationFrame(animateWinFlyby);
+            }
+          }
+          requestAnimationFrame(animateWinFlyby);
+        }
+      }
+    );
+  }, [playSequence, onWinStart, onComplete]);
+
+  // Instantiate linked list model
   const constellationList = useMemo(() => {
-    return activeConstellation ? new ConstellationLinkedList(activeConstellation) : null;
-  }, [activeConstellation]);
+    return constellationData ? new ConstellationLinkedList(constellationData) : null;
+  }, [constellationData]);
+
+  const starNodes = useMemo(() => {
+    const listStars = constellationList?.getAllStarNodes() || [];
+    if (listStars.length > 0) return listStars.map((s) => ({ ...s, isFake: false }));
+    const raw = constellationData?.star_nodes || constellationData?.stars || PLACEHOLDER_STARS;
+    return raw.map((s) => ({ ...s, isFake: false }));
+  }, [constellationList, constellationData]);
+
+  const fakeNodes = useMemo(() => {
+    const listFakes = constellationList?.getAllFakeNodes() || [];
+    if (listFakes.length > 0) return listFakes.map((s) => ({ ...s, isFake: true }));
+    const raw = constellationData?.fake_nodes || constellationData?.fake_stars || [];
+    return raw.map((s) => ({ ...s, isFake: true }));
+  }, [constellationList, constellationData]);
+
+  // Target valid connection guides for testing visualization & logic validation
+  const validGuideSegments = useMemo(() => {
+    const segments = [];
+    starNodes.forEach((node) => {
+      if (node.next_node_id !== null && node.next_node_id !== undefined) {
+        segments.push({ from: node.id, to: node.next_node_id });
+      }
+    });
+    if (segments.length === 0 && constellationData?.connections) {
+      return constellationData.connections;
+    }
+    return segments;
+  }, [starNodes, constellationData]);
+
+  // Check if edge is valid in either direction (bidirectional: A -> B or B -> A)
+  const isValidEdge = useCallback((fromId, toId) => {
+    return validGuideSegments.some(
+      (edge) =>
+        (edge.from === fromId && edge.to === toId) ||
+        (edge.from === toId && edge.to === fromId)
+    );
+  }, [validGuideSegments]);
 
   /**
-   * Compute how accurately the player traced the segment from nodeA to nodeB.
-   * Projects each traced point onto the line segment and averages perpendicular distance.
-   * Returns accuracy between 0.0 and 100.0.
+   * LOGIC LAYER — Snap decision handler.
+   * Receives raw drag events from the input adapter (mouse / wand) and decides validity.
+   * In production: this decision comes from the backend via WebSocket (isSnap: true/false).
+   * Validates bidirectional edge (A -> B or B -> A) against constellation target.
    */
-  function computeSegmentAccuracy(points, fromNode, toNode) {
-    if (!points || points.length < 2) return 100.0; // no trace data = assume perfect
-    const ax = fromNode.x, ay = fromNode.y;
-    const bx = toNode.x,  by = toNode.y;
-    const dx = bx - ax, dy = by - ay;
-    const lenSq = dx * dx + dy * dy;
-    const TOLERANCE = 0.08; // 8% of normalized screen width
+  const [snapEffect, setSnapEffect] = useState(null);
 
-    let totalDist = 0;
-    for (const p of points) {
-      let dist;
-      if (lenSq === 0) {
-        dist = Math.hypot(p.x - ax, p.y - ay);
+  const handleDragComplete = useCallback(({ fromStarId, toStarId }) => {
+    if (fromStarId != null && toStarId != null) {
+      // 1. Check if edge is valid in either direction (bidirectional)
+      const valid = isValidEdge(fromStarId, toStarId);
+
+      // 2. Check if already connected
+      const exists = completedConnections.some(
+        (s) =>
+          (s.from === fromStarId && s.to === toStarId) ||
+          (s.from === toStarId && s.to === fromStarId)
+      );
+
+      if (valid && !exists) {
+        // SUCCESS SNAP (isSnap = true)
+        const result = { success: true, from: fromStarId, to: toStarId, timestamp: Date.now() };
+        setSnapEffect(result);
+        const updatedConns = [...completedConnections, { from: fromStarId, to: toStarId }];
+        setCompletedConnections(updatedConns);
+        playSfx('snap');
+
+        // Check if finished full constellation
+        const requiredCount = validGuideSegments.length > 0 ? validGuideSegments.length : starNodes.length - 1;
+        if (updatedConns.length >= requiredCount) {
+          const elapsed = Date.now() - startTimeRef.current;
+          const elapsedSec = Math.round(elapsed / 100) / 10;
+          const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
+          const calculatedScore = Math.max(75, 100 - wrongConnections * 5);
+
+          const winResult = {
+            completed_status: 1,
+            isWin: true,
+            score: calculatedScore,
+            telemetry: {
+              time_spent_sec: elapsedSec,
+              wrong_attempts: wrongConnections,
+              travel_dist_cm: travelCm > 0 ? travelCm : 28.5,
+            },
+          };
+
+          if (sessionId) {
+            submitAttempt(sessionId, {
+              time_elapsed_ms: elapsed,
+              wrong_connections: wrongConnections,
+              total_clicks: totalClicks + 1,
+              wand_travel_dist: wandTravelDistRef.current,
+              recalibration_count: recalibrationCount,
+              completed_status: 1,
+            })
+              .then((res) => startWinDialogue({ ...winResult, ...res }))
+              .catch(() => startWinDialogue(winResult));
+          } else {
+            startWinDialogue(winResult);
+          }
+        }
       } else {
-        const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.y - ay) * dy) / lenSq));
-        const projX = ax + t * dx, projY = ay + t * dy;
-        dist = Math.hypot(p.x - projX, p.y - projY);
+        // INVALID EDGE OR ALREADY CONNECTED (isSnap = false)
+        const result = { success: false, from: fromStarId, to: toStarId, timestamp: Date.now() };
+        setSnapEffect(result);
+        playSfx('wrong');
+        setWrongConnections((prev) => prev + 1);
       }
-      totalDist += dist;
+    } else {
+      // RELEASED IN EMPTY SPACE (isSnap = false)
+      const result = { success: false, from: fromStarId, to: null, timestamp: Date.now() };
+      setSnapEffect(result);
+      playSfx('wrong');
     }
-    const avgDist = totalDist / points.length;
-    return Math.max(0, Math.min(100, (1 - avgDist / TOLERANCE) * 100));
-  }
+  }, [completedConnections, isValidEdge]);
 
-  // Setup head star on mount / constellation change
+  // Mouse-to-Wand Testing Adapter — pure input emitter, no snap logic inside
+  const { wandPointer: mouseWand, drawingPath } = useMouseWandAdapter({
+    stars: [...starNodes, ...fakeNodes],
+    enabled: true,
+    onDragComplete: handleDragComplete,
+  });
+
+  // Initial head node setup
   useEffect(() => {
     if (constellationList) {
       const head = constellationList.getHead();
-      console.log(`%c[ASTRA] Loaded Constellation: ${constellationList.name} | Start: ${head?.label || head?.id} | Need ${constellationList.getTotalRequiredConnections()} connections`, 'color: #38bdf8; font-weight: bold;');
       setActiveNode(head);
-      activeNodeRef.current = head;
       setCompletedConnections([]);
-      connectionsRef.current = [];
-      isCompletedRef.current = false;
-      setIsCompleted(false);
-      setSolvedScore(null);
-      setSolvedAccuracy(null);
-      tracedPointsRef.current = [];
-      connectionAccuraciesRef.current = [];
     }
   }, [constellationList]);
 
-  // Timer expiration
+  // ---- 1. Gesture Callbacks ----
+
+  // Left/Right tilt: Reset lines
+  const handleResetLines = useCallback(() => {
+    if (constellationList) {
+      setCompletedConnections([]);
+      setActiveNode(constellationList.getHead());
+      playSfx('wrong');
+    }
+  }, [constellationList]);
+
+  // Circle motion: Force Emergency Exit
+  const handleCircleExit = useCallback(async () => {
+    if (!sessionId) {
+      onForceExit?.();
+      return;
+    }
+    const elapsed = Date.now() - startTimeRef.current;
+    try {
+      await submitAttempt(sessionId, {
+        time_elapsed_ms: elapsed,
+        wrong_connections: wrongConnections,
+        total_clicks: totalClicks,
+        wand_travel_dist: wandTravelDistRef.current,
+        recalibration_count: recalibrationCount,
+        completed_status: 3, // circle force exit
+      });
+    } catch (e) {
+      console.error(e);
+    }
+    onForceExit?.();
+  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onForceExit]);
+
+  // Shake: Recalibrate
+  const handleRecalibrate = useCallback(() => {
+    setRecalibrationCount((c) => c + 1);
+  }, []);
+
+  // Timer expiration: Disqualified (Plays Phase D dialogue lines D1 & D2 before eye blink closure)
   const handleTimerExpire = useCallback(async () => {
-    if (isCompletedRef.current) return;
-    isCompletedRef.current = true;
-    console.warn('[ASTRA] â³ Time Expired! Disqualifying attempt (Score: 0.0)...');
     playSfx('timerEnd');
     const elapsed = Date.now() - startTimeRef.current;
-    const currentSid = sessionIdRef.current || sessionId;
-    if (currentSid) {
+    const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
+    const failResult = {
+      completed_status: 2,
+      isWin: false,
+      score: Math.max(15, 45 - wrongConnections * 5),
+      telemetry: {
+        time_spent_sec: Math.round(elapsed / 100) / 10,
+        wrong_attempts: wrongConnections,
+        travel_dist_cm: travelCm > 0 ? travelCm : 32.1,
+      },
+    };
+
+    if (sessionId) {
       try {
-        const expiredAccuracy = connectionAccuraciesRef.current.length > 0
-          ? Math.round((connectionAccuraciesRef.current.reduce((a, b) => a + b, 0) / connectionAccuraciesRef.current.length) * 10) / 10
-          : 0.0;
-        setSolvedAccuracy(expiredAccuracy);
-        
-        const res = await submitAttempt(currentSid, {
+        await submitAttempt(sessionId, {
           time_elapsed_ms: elapsed,
-          wrong_connections: wrongRef.current,
-          total_clicks: clicksRef.current,
+          wrong_connections: wrongConnections,
+          total_clicks: totalClicks,
           wand_travel_dist: wandTravelDistRef.current,
-          recalibration_count: 0,
+          recalibration_count: recalibrationCount,
           completed_status: 2, // Disqualified
-          completed_connections: connectionsRef.current.length,
-          total_connections: constellationList ? constellationList.getTotalRequiredConnections() : 0,
-          accuracy: expiredAccuracy,
         });
-        console.log('[ASTRA] ðŸ›‘ Disqualified server response:', res);
-        onDisqualified?.(res);
-        return;
       } catch (e) {
-        console.error('[ASTRA] Disqualify submit error:', e);
+        console.error(e);
       }
     }
-    onDisqualified?.();
-  }, [sessionId, onDisqualified]);
+
+    // Play Phase D Fail Dialogue (D1 "That's not a match..." -> D2 "Brace, brace, BRA—") -> Eye Blink / Fail
+    playSequence(DIALOGUE_CONFIG.phaseDFail, () => {
+      onDisqualified?.(failResult);
+    });
+  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onDisqualified, playSequence]);
 
   const timeLimit = constellationList?.timeLimitSec || 30;
-  const { timeLeft, start: startTimer } = useGameTimer(timeLimit, handleTimerExpire);
+  const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, handleTimerExpire);
 
-  // Connection Handler (used by hover glide AND mouse/wand clicks)
-  const tryConnectToNode = useCallback((targetNode) => {
-    if (isCompletedRef.current || !constellationList || !targetNode) return;
+  // Trigger Phase C Dialogue Warnings at 20s left and 10s left
+  useEffect(() => {
+    if (timeLeft === 20 && !hasPlayed20sRef.current) {
+      hasPlayed20sRef.current = true;
+      playLine(DIALOGUE_CONFIG.timeWarning20s);
+    }
+    if (timeLeft === 10 && !hasPlayed10sRef.current) {
+      hasPlayed10sRef.current = true;
+      playLine(DIALOGUE_CONFIG.timeWarning10s);
+    }
+  }, [timeLeft, playLine]);
 
-    const currentActive = activeNodeRef.current;
-    if (!currentActive) return;
+  // ---- 2. Connection Cycle Completion (Tilt Forward -> Untilt) ----
+  const currentSnappedRef = useRef(null);
 
-    // Ignore if already at the target star
-    if (currentActive.id === targetNode.id) return;
+  const handleConnectionCycleComplete = useCallback(async () => {
+    setTotalClicks((c) => c + 1);
 
-    // Check if targetNode is the valid next star in sequence
-    const isValid = constellationList.isValidNextStep(currentActive.id, targetNode.id);
-    console.log(`[ASTRA] Attempting: ${currentActive.label || currentActive.id} â”€â”€> ${targetNode.label || targetNode.id} | Valid: ${isValid}`);
+    const snapped = currentSnappedRef.current;
+    if (!snapped || !snapped.node || !activeNode || !constellationList) return;
 
-    if (isValid) {
-      // 1. Success! Compute accuracy for this segment using traced points
-      const segAccuracy = computeSegmentAccuracy(tracedPointsRef.current, currentActive, targetNode);
-      connectionAccuraciesRef.current.push(segAccuracy);
-      tracedPointsRef.current = []; // reset for next segment
+    const targetNode = snapped.node;
 
+    // Validate if snapped target is the valid next step in linked list
+    if (constellationList.isValidNextStep(activeNode.id, targetNode.id)) {
+      // Valid connection!
       playSfx('correct');
-      clicksRef.current += 1;
-      setTotalClicks(clicksRef.current);
-
-      const newConn = { from: currentActive, to: targetNode };
-      const updatedConns = [...connectionsRef.current, newConn];
-      connectionsRef.current = updatedConns;
+      const newConn = { from: activeNode, to: targetNode };
+      const updatedConns = [...completedConnections, newConn];
       setCompletedConnections(updatedConns);
-
-      activeNodeRef.current = targetNode;
       setActiveNode(targetNode);
 
-      const totalRequired = constellationList.getTotalRequiredConnections();
-      console.log(`%c[ASTRA] âœ… Connected: ${currentActive.label || currentActive.id} â”€â”€> ${targetNode.label || targetNode.id} (${updatedConns.length}/${totalRequired})`, 'color: #4ade80; font-weight: bold;');
-
-      // 2. Check if constellation is 100% complete
-      if (updatedConns.length >= totalRequired) {
-        isCompletedRef.current = true;
-        setIsCompleted(true);
-
+      // Check if finished full constellation
+      if (updatedConns.length >= constellationList.getTotalRequiredConnections()) {
+        stopTimer();
         const elapsed = Date.now() - startTimeRef.current;
-        const currentSid = sessionIdRef.current || sessionId;
-        console.log(`%c[ASTRA] ðŸŽ‰ ${constellationList.name} Fully Completed in ${(elapsed/1000).toFixed(1)}s! Submitting...`, 'color: #facc15; font-size: 14px; font-weight: bold;');
+        const elapsedSec = Math.round(elapsed / 100) / 10;
+        const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
+        const calculatedScore = Math.max(75, 100 - wrongConnections * 5);
 
-        setTimeout(async () => {
-          if (currentSid) {
-            try {
-              // Compute overall tracing accuracy from all segments
-              const accuracies = connectionAccuraciesRef.current;
-              const overallAccuracy = accuracies.length > 0
-                ? Math.round((accuracies.reduce((a, b) => a + b, 0) / accuracies.length) * 10) / 10
-                : 100.0;
-              setSolvedAccuracy(overallAccuracy);
-              console.log(`%c[ASTRA] Tracing Accuracy: ${overallAccuracy}%`, 'color: #a78bfa; font-weight: bold;');
-              const res = await submitAttempt(currentSid, {
-                time_elapsed_ms: elapsed,
-                wrong_connections: wrongRef.current,
-                total_clicks: clicksRef.current,
-                wand_travel_dist: wandTravelDistRef.current,
-                recalibration_count: 0,
-                completed_status: 1, // Completed
-                accuracy: overallAccuracy,
-                completed_connections: totalRequired,
-                total_connections: totalRequired,
-              });
-              const score = res.attempt_score ?? res.score ?? 90;
-              setSolvedScore(score);
-              console.log(`%c[ASTRA SCORE RESULT] ðŸ† Score: ${score} pts | Attempts Used: ${res.attempts_used} | Best: ${res.best_score}`, 'color: #4ade80; font-size: 16px; font-weight: bold;');
-              onComplete?.(res);
-              return;
-            } catch (e) {
-              console.error('[ASTRA] Submit error:', e);
-            }
-          }
-          setSolvedScore(92.5);
-          onComplete?.({ completed_status: 1, score: 92.5, attempt_score: 92.5 });
-        }, 1200);
+        const winResult = {
+          completed_status: 1,
+          isWin: true,
+          score: calculatedScore,
+          telemetry: {
+            time_spent_sec: elapsedSec,
+            wrong_attempts: wrongConnections,
+            travel_dist_cm: travelCm > 0 ? travelCm : 28.5,
+          },
+        };
+
+        if (sessionId) {
+          submitAttempt(sessionId, {
+            time_elapsed_ms: elapsed,
+            wrong_connections: wrongConnections,
+            total_clicks: totalClicks + 1,
+            wand_travel_dist: wandTravelDistRef.current,
+            recalibration_count: recalibrationCount,
+            completed_status: 1,
+          })
+            .then((res) => startWinDialogue({ ...winResult, ...res }))
+            .catch(() => startWinDialogue(winResult));
+        } else {
+          startWinDialogue(winResult);
+        }
       }
     } else {
-      // 3. Wrong star reached
-      wrongRef.current += 1;
-      setWrongConnections(wrongRef.current);
-      playSfx('wrong');
-      console.warn(`[ASTRA] âŒ Wrong connection to ${targetNode.label || targetNode.id}! Expected next star after ${currentActive.label || currentActive.id}. Total mistakes: ${wrongRef.current}`);
+      // Invalid connection attempt
+      if (activeNode.id !== targetNode.id) {
+        setWrongConnections((w) => w + 1);
+        playSfx('wrong');
+      }
     }
-  }, [constellationList, sessionId, onComplete]);
+  }, [activeNode, constellationList, completedConnections, sessionId, wrongConnections, totalClicks, recalibrationCount, onComplete]);
 
-  // Wand tracking hook
-  const { videoRef, pointer, onDraw, gestureStatus } = useWandGestures({
+  // ---- 3. Wand Gestures Hook ----
+  const { videoRef, pointer, onDraw, gestureStatus, isReady } = useWandGestures({
     enabled: true,
-    onConnectionCycleComplete: () => {
-      const snapped = currentSnappedRef.current;
-      if (snapped?.node) tryConnectToNode(snapped.node);
-    },
+    onResetLines: handleResetLines,
+    onForceExit: handleCircleExit,
+    onRecalibrate: handleRecalibrate,
+    onConnectionCycleComplete: handleConnectionCycleComplete,
   });
 
-  // Mouse fallback
-  const [mousePointer, setMousePointer] = useState(null);
-  const [isMouseDown, setIsMouseDown] = useState(false);
-
-  const effectivePointer = pointer || mousePointer;
-  const effectiveOnDraw = onDraw || isMouseDown;
-
-  // Magnetic Snapping + Glide Auto-Connect
+  // Calculate magnetic snap every pointer update
   const snappedPointer = useMemo(() => {
-    if (!effectivePointer || !constellationList) return null;
+    if (!pointer || !constellationList) return null;
     const allStars = constellationList.getAllStarNodes();
-    const snap = getMagneticSnap(effectivePointer, allStars);
+    const snap = getMagneticSnap(pointer, allStars);
     currentSnappedRef.current = snap;
-
-    if (snap?.snapped && snap?.node && snap.node.id !== lastSnappedNodeIdRef.current) {
-      lastSnappedNodeIdRef.current = snap.node.id;
-      console.log(`[ASTRA] ðŸŽ¯ Pointer reached star: ${snap.node.label || snap.node.id}`);
-      tryConnectToNode(snap.node);
-    } else if (!snap?.snapped) {
-      lastSnappedNodeIdRef.current = null;
-    }
-
     return snap;
-  }, [effectivePointer, constellationList, tryConnectToNode]);
+  }, [pointer, constellationList]);
 
-  // Distance tracking
+  // Accumulate wand distance
   useEffect(() => {
-    if (effectivePointer && prevPointerRef.current) {
+    if (pointer && prevPointerRef.current) {
       const d = calculateDistance(
         prevPointerRef.current.x,
         prevPointerRef.current.y,
-        effectivePointer.x,
-        effectivePointer.y
+        pointer.x,
+        pointer.y
       );
       wandTravelDistRef.current += d * 1000;
     }
-    // Collect for accuracy if NOT yet completed
-    if (!isCompletedRef.current && effectivePointer) {
-      tracedPointsRef.current = [...(tracedPointsRef.current || []), { x: effectivePointer.x, y: effectivePointer.y }];
-      // Cap at 500 points per segment to keep memory manageable
-      if (tracedPointsRef.current.length > 500) {
-        tracedPointsRef.current = tracedPointsRef.current.slice(-500);
-      }
-    }
-    prevPointerRef.current = effectivePointer;
-  }, [effectivePointer]);
+    prevPointerRef.current = pointer;
+  }, [pointer]);
 
-  // Start Session on mount
+  // Start Session on mount / attempt reset (Active 30s countdown timer enabled)
   useEffect(() => {
-    if (sessionStartedRef.current) return;
-    sessionStartedRef.current = true;
-
+    setWinFlybyProgress(null);
+    setCompletedConnections([]);
+    setWrongConnections(0);
+    setTotalClicks(0);
+    setRecalibrationCount(0);
+    wandTravelDistRef.current = 0;
     startTimeRef.current = Date.now();
     startTimer();
 
-    const pid = player?.id || 1;
-    const cid = activeConstellation?.id || 1;
-
-    startSession(pid, cid)
-      .then((res) => {
-        console.log(`%c[ASTRA] Session Started (ID: ${res.session_id}, Attempt: ${res.attempt_number})`, 'color: #a78bfa;');
-        setSessionId(res.session_id);
-        sessionIdRef.current = res.session_id;
-      })
-      .catch((err) => {
-        console.warn('[ASTRA] startSession error:', err);
-      });
+    if (player?.id && constellationData?.id) {
+      startSession(player.id, constellationData.id)
+        .then((res) => setSessionId(res.session_id))
+        .catch(console.error);
+    }
 
     function onResize() {
       setDimensions({ w: window.innerWidth, h: window.innerHeight });
     }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [player, constellationData, attemptNumber, startTimer]);
 
-  // Mouse event listeners
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setMousePointer({ x, y });
-  };
+  // Calculate win 3D fly-by expansion and turn parameters
+  let winScale = 1.0;
+  let winOpacity = 1.0;
+  let winTurnX = 0;
+  let winTurnY = 0;
 
-  const handleMouseDown = () => {
-    setIsMouseDown(true);
-  };
-
-  const handleMouseUp = () => {
-    setIsMouseDown(false);
-    const target = currentSnappedRef.current?.node;
-    if (target) tryConnectToNode(target);
-  };
+  if (winFlybyProgress !== null) {
+    const p = winFlybyProgress;
+    if (p < 0.35) {
+      // Phase 1: Bank Turn (Constellation & Stars sweep up-left together as camera rotates)
+      const turnP = Math.sin((p / 0.35) * (Math.PI / 2));
+      winScale = 1.0 + turnP * 1.8;
+      winOpacity = 1.0 - turnP * 0.6;
+      winTurnX = -turnP * 580;
+      winTurnY = -turnP * 720;
+    } else {
+      // Phase 2: Straight Forward Hyperspace Acceleration (Radial point at CENTER, constellation cleared off-screen)
+      const fwdP = (p - 0.35) / 0.65;
+      const cubicFwd = Math.pow(fwdP, 3);
+      winScale = 2.8 + cubicFwd * 3.2;
+      winOpacity = Math.max(0, 0.4 - fwdP * 0.8);
+      winTurnX = -580 - fwdP * 300;
+      winTurnY = -720 - fwdP * 300;
+    }
+  }
 
   return (
-    <div
-      className="screen screen--challenge"
-      onMouseMove={handleMouseMove}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      style={{ cursor: pointer ? 'none' : 'crosshair' }}
-    >
-      {/* Background Webcam */}
-      <video ref={videoRef} autoPlay playsInline className="challenge-video" />
-
-      {/* Main Interactive Canvas */}
-      <ConstellationCanvas
-        starNodes={constellationList?.getAllStarNodes() || []}
-        fakeNodes={constellationList?.getAllFakeNodes() || []}
-        completedConnections={completedConnections}
-        activeNode={activeNode}
-        wandPointer={effectivePointer}
-        snappedPointer={snappedPointer}
-        onDraw={effectiveOnDraw}
+    <div className="screen screen--challenge">
+      {/* Main Presentation Layer */}
+      <ConstellationLayer
+        stars={[...starNodes, ...fakeNodes]}
+        connectedSegments={completedConnections}
+        validGuideSegments={validGuideSegments}
+        wandPointer={mouseWand || snappedPointer || pointer}
+        activeStarId={activeNode?.id}
+        drawingPath={drawingPath}
+        snapEffect={snapEffect}
+        opacity={winFlybyProgress !== null ? winOpacity : 1}
+        scale={winScale}
+        winTurnX={winTurnX}
+        winTurnY={winTurnY}
         width={dimensions.w}
         height={dimensions.h}
       />
 
-      {/* Exit Button */}
-      <button
-        onClick={() => onForceExit?.()}
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 20,
-          zIndex: 30,
-          background: 'rgba(15, 23, 42, 0.75)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          color: '#94a3b8',
-          padding: '6px 12px',
-          borderRadius: 10,
-          fontSize: 12,
-          fontWeight: 700,
-          cursor: 'pointer',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        ✕ Exit
-      </button>
-
-      {/* HUD Bar */}
-      <HUD
-        constellationName={constellationList?.name}
-        timeLeft={timeLeft}
-        attemptNumber={attemptNumber}
-        maxAttempts={3}
-        wrongConnections={wrongConnections}
-        clicks={totalClicks}
-        gestureStatus={pointer ? gestureStatus : isMouseDown ? 'Drawing (Mouse)' : 'Neutral (Mouse Active)'}
-        onDraw={effectiveOnDraw}
-        recalibrations={0}
-      />
-
-      {/* Completion Banner */}
-      {isCompleted && (
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(10, 14, 26, 0.85)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 20,
-          animation: 'fade-in 0.3s ease-out',
-        }}>
-          <h2 style={{
-            fontSize: '2.5rem',
-            color: '#4ade80',
-            textShadow: '0 0 25px rgba(74, 222, 128, 0.9)',
-            marginBottom: '0.5rem',
-          }}>
-            âœ¦ {constellationList?.name} Solved!
-          </h2>
-          <p style={{ color: '#facc15', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-            Score: {solvedScore !== null ? `${solvedScore} pts` : 'Calculating...'}
-          </p>
-          <p style={{ color: '#a78bfa', fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-            Tracing Accuracy: {solvedAccuracy !== null ? `${solvedAccuracy.toFixed(1)}%` : 'Calculating...'}
-          </p>
-          <p style={{ color: '#94a3b8', fontSize: '1rem' }}>
-            Loading next constellation...
-          </p>
-        </div>
+      {/* Floating Wand Reticle Cursor Overlay */}
+      {winFlybyProgress === null && (
+        <WandCursor
+          pointer={mouseWand || snappedPointer || pointer}
+          width={dimensions.w}
+          height={dimensions.h}
+        />
       )}
+
+      {/* Upper Cockpit HUD: Constellation Badge (Left) + Timer (Right) */}
+      {winFlybyProgress === null && (
+        <HUD
+          timeLeft={timeLeft}
+          constellationName={constellationData?.name || constellationList?.name || 'Orion (Demo)'}
+        />
+      )}
+
+      {/* Gameplay Subtitle Overlay */}
+      <SubtitleOverlay subtitle={dialogue.activeSubtitle} />
     </div>
   );
 }

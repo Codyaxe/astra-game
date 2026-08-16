@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import astraIcon from '../assets/astraIcon.png';
 
 const STAR_COUNT = 180;
 
@@ -12,6 +13,7 @@ export default function TitleScreen({
   onOpenLeaderboard,
   onOpenDashboard,
   onQuickPlay,
+  onStart,
 }) {
   const canvasRef = useRef(null);
 
@@ -62,7 +64,7 @@ export default function TitleScreen({
 
   return (
     <div className="screen screen--title" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <canvas ref={canvasRef} className="title-canvas" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
+      <canvas ref={canvasRef} className="title-canvas" style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
       
       {/* Top Bar for Admin & Leaderboard */}
       <div style={{ position: 'absolute', top: 20, right: 24, zIndex: 10, display: 'flex', gap: 12 }}>
@@ -106,21 +108,25 @@ export default function TitleScreen({
         </button>
       </div>
 
-      <div className="title-content" style={{ position: 'relative', zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#f4d58d', letterSpacing: 4, textTransform: 'uppercase' }}>
-          ✦ Interactive Starlight Installation ✦
+      <div className="title-content" style={{ position: 'relative', zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img src={astraIcon} alt="Astra Developers" style={{ width: 44, height: 44, objectFit: 'contain' }} />
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#f4d58d', letterSpacing: 4, textTransform: 'uppercase' }}>
+            ASTRA DEVELOPERS
+          </div>
         </div>
-        <h1 className="title-logo" style={{ fontSize: 'clamp(2.4rem, 6vw, 4.5rem)', fontWeight: 900, background: 'linear-gradient(135deg, #fff 0%, #f4d58d 60%, #e0a96d 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: 2 }}>
-          ASTRA
+
+        <h1 className="title-logo" style={{ fontSize: 'clamp(2.6rem, 6vw, 4.8rem)', fontWeight: 900, background: 'linear-gradient(135deg, #fff 0%, #f4d58d 60%, #e0a96d 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: 3 }}>
+          STAR LINK
         </h1>
         <p style={{ color: '#94a3b8', fontSize: 16, margin: 0, letterSpacing: 1 }}>
-          Constellation Tracing & Gesture Challenge
+          Interactive Constellation Tracing & Gesture Challenge
         </p>
 
         {/* Primary Action Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24, width: '100%', maxWidth: 360, padding: '0 20px', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 20, width: '100%', maxWidth: 360, padding: '0 20px', boxSizing: 'border-box' }}>
           <button
-            onClick={onOpenScanner}
+            onClick={onOpenScanner || onStart}
             style={{
               width: '100%',
               padding: '16px 20px',
@@ -137,7 +143,6 @@ export default function TitleScreen({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
-              transition: 'transform 0.1s',
             }}
           >
             📷 SCAN QR TICKET TO PLAY

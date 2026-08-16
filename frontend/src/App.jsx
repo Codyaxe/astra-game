@@ -1,14 +1,13 @@
 /**
- * App.jsx — Master Unified Router and State Manager for Astra
+ * App.jsx — Master Unified Router & Cockpit Stage for Astra
  *
- * All-In-One Unified Application:
- *  - Title Attract Screen
- *  - Live QR Ticket Scanner Kiosk
- *  - ID Card OCR & Mobile Registration Form
- *  - Admin Player & Ticket Management Dashboard
- *  - High Score Leaderboard
- *  - Interactive Gesture Constellation Tracing Challenge
+ * Combines:
+ * 1. Unified Kiosk Architecture (Title, Scanner, Register, Dashboard, Leaderboard)
+ * 2. In-Game Spaceship Cockpit Viewport, Animated Starfield & Holographic Effects
+ * 3. AI Voiceovers & Subtitle Dialogue Controller
+ * 4. Flask Backend Integration (MySQL, OCR ID Scanner, QR Ticket Puncher)
  */
+
 import { useState, useEffect, useCallback } from 'react';
 import { getConstellations, registerPlayer } from './services/api';
 import { preloadAll } from './utils/audio';
@@ -23,6 +22,14 @@ import LoadingScreen from './screens/LoadingScreen';
 import GameReadyScreen from './screens/GameReadyScreen';
 import ChallengeScreen from './screens/ChallengeScreen';
 import LeaderboardScreen from './screens/LeaderboardScreen';
+
+import StarfieldCanvas from './components/starlink/StarfieldCanvas';
+import ShipCockpitViewport from './components/starlink/ShipCockpitViewport';
+import ScoreOverlay from './components/starlink/ScoreOverlay';
+import EyelidBlinkOverlay from './components/starlink/EyelidBlinkOverlay';
+import SubtitleOverlay from './components/dialogue/SubtitleOverlay';
+import useDialogueController from './hooks/useDialogueController';
+import { DIALOGUE_CONFIG } from './config/dialogueConfig';
 
 export default function App() {
   const [screen, setScreen] = useState(() => {
@@ -41,22 +48,24 @@ export default function App() {
   const [autostartData, setAutostartData] = useState(null);
   const [constellations, setConstellations] = useState(DEFAULT_CONSTELLATIONS);
   const [constellationIndex, setConstellationIndex] = useState(0);
+  const [isScoreExiting, setIsScoreExiting] = useState(false);
 
-  // Preload SFX
-  useEffect(() => {
-    preloadAll(ASSETS.sfx);
-  }, []);
+  // Dialogue Controller for in-game voiceovers & subtitles
+  const dialogue = useDialogueController(DIALOGUE_CONFIG);
 
-  // Async background sync with backend for dynamic constellations
+  // Preload audio & fetch real constellations from backend
   useEffect(() => {
+    preloadAll(ASSETS.audio);
+
     getConstellations()
-      .then((res) => {
-        const valid = (res.constellations || []).filter(
-          (c) => Array.isArray(c.star_nodes) && c.star_nodes.length >= 2
-        );
-        if (valid.length > 0) setConstellations(valid);
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setConstellations(data);
+        }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('Backend unavailable, using default constellations:', err);
+      });
   }, []);
 
   // ---- Navigation Handlers ----
@@ -87,32 +96,30 @@ export default function App() {
   }, []);
 
   const handleChallengeComplete = useCallback((result) => {
-    setLastAttemptResult(result);
+    setLastAttemptResult(result || { isWin: true, score: 95 });
     if (result?.attempts_used !== undefined) {
       setPlayer((prev) => prev
         ? { ...prev, total_attempts_used: result.attempts_used, best_score: result.best_score }
         : prev
       );
     }
-    if (constellationIndex + 1 < constellations.length) {
-      setConstellationIndex((idx) => idx + 1);
-    } else {
-      setScreen('leaderboard');
-    }
-  }, [constellationIndex, constellations.length]);
+    setScreen('challenge_win_score');
+  }, []);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
-    setLastAttemptResult(result);
-    setScreen('leaderboard');
+    setLastAttemptResult(result || { isWin: false, score: 0 });
+    setScreen('challenge_fail');
   }, []);
 
   const handleRetryNextAttempt = useCallback(() => {
+    setIsScoreExiting(false);
     setAttemptNumber((prev) => prev + 1);
     setConstellationIndex(0);
     setScreen('challenge');
   }, []);
 
   const handleReturnToTitle = useCallback(() => {
+    setIsScoreExiting(false);
     setPlayer(null);
     setLastAttemptResult(null);
     setConstellationIndex(0);
@@ -161,11 +168,29 @@ export default function App() {
 
   const currentConstellation = constellations[constellationIndex] || null;
 
-  // ---- Unified Router ----
+  // Derive global starfield warp state
+  const bgState =
+    screen === 'loading' ? 'warping'
+    : screen === 'challenge_win' || screen === 'challenge_win_score' ? 'sustained_warp'
+    : screen === 'challenge_fail' ? 'impact'
+    : screen === 'challenge' ? 'settled'
+    : 'idle';
 
-  switch (screen) {
-    case 'title':
-      return (
+  return (
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#0a0e1a' }}>
+      {/* Global Starfield Background */}
+      <StarfieldCanvas state={bgState} />
+
+      {/* Global Cockpit Frame for In-Game screens */}
+      {(screen === 'challenge' || screen === 'challenge_win_score' || screen === 'challenge_fail') && (
+        <ShipCockpitViewport />
+      )}
+
+      {/* Subtitle Dialogue Overlay */}
+      <SubtitleOverlay subtitle={dialogue.activeSubtitle} />
+
+      {/* Screen Render Switch */}
+      {screen === 'title' && (
         <TitleScreen
           onOpenScanner={() => setScreen('scanner')}
           onOpenRegister={() => setScreen('register')}
@@ -173,50 +198,47 @@ export default function App() {
           onOpenDashboard={() => setScreen('dashboard')}
           onQuickPlay={handleQuickPlay}
         />
-      );
+      )}
 
-    case 'scanner':
-      return (
+      {screen === 'scanner' && (
         <ScannerScreen
           onBack={() => setScreen('title')}
           onStartGame={handleRegistered}
         />
-      );
+      )}
 
-    case 'register':
-      return (
+      {screen === 'register' && (
         <RegisterScreen
           onBack={() => setScreen('title')}
           onOpenScanner={() => setScreen('scanner')}
           onOpenDashboard={() => setScreen('dashboard')}
           onStartGame={handleRegistered}
         />
-      );
+      )}
 
-    case 'dashboard':
-      return (
+      {screen === 'dashboard' && (
         <DashboardScreen
           onBack={() => setScreen('title')}
         />
-      );
+      )}
 
-    case 'loading':
-      return <LoadingScreen message="Loading constellation challenge..." />;
+      {screen === 'loading' && (
+        <LoadingScreen message="Loading constellation challenge..." />
+      )}
 
-    case 'autostart_ready':
-      return (
+      {screen === 'autostart_ready' && (
         <GameReadyScreen
           player={autostartData?.player}
           onStart={() => handleRegistered(autostartData.player, autostartData.attemptsRemaining)}
         />
-      );
+      )}
 
-    case 'challenge':
-      return (
+      {screen === 'challenge' && (
         <ChallengeScreen
           key={`challenge-${attemptNumber}-${constellationIndex}-${currentConstellation?.id || 0}`}
           player={player}
           constellation={currentConstellation}
+          constellationData={currentConstellation}
           constellationIndex={constellationIndex}
           totalConstellations={constellations.length}
           attemptNumber={attemptNumber}
@@ -224,19 +246,33 @@ export default function App() {
           onDisqualified={handleForceExitOrDisqualified}
           onForceExit={handleForceExitOrDisqualified}
         />
-      );
+      )}
 
-    case 'leaderboard':
-      return (
+      {(screen === 'challenge_win_score' || screen === 'challenge_fail') && (
+        <ScoreOverlay
+          score={lastAttemptResult?.score || lastAttemptResult?.attempt_score || 95}
+          isWin={screen === 'challenge_win_score'}
+          isExiting={isScoreExiting}
+          onContinue={() => {
+            if (constellationIndex + 1 < constellations.length) {
+              setConstellationIndex((idx) => idx + 1);
+              setScreen('challenge');
+            } else {
+              setScreen('leaderboard');
+            }
+          }}
+          onReturnToTitle={handleReturnToTitle}
+        />
+      )}
+
+      {screen === 'leaderboard' && (
         <LeaderboardScreen
           player={player}
           lastAttemptResult={lastAttemptResult}
           onRetry={handleRetryNextAttempt}
           onReturnToTitle={handleReturnToTitle}
         />
-      );
-
-    default:
-      return <TitleScreen onQuickPlay={handleQuickPlay} onOpenScanner={() => setScreen('scanner')} />;
-  }
+      )}
+    </div>
+  );
 }
