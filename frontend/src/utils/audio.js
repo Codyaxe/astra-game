@@ -54,10 +54,8 @@ export function stopLoop(key) {
   audio.currentTime = 0;
 }
 
-/**
- * Preload all game SFX defined in the asset manifest.
- */
 export function preloadAll(sfxMap) {
+  if (!sfxMap || typeof sfxMap !== 'object') return;
   for (const [key, src] of Object.entries(sfxMap)) {
     preload(key, src);
   }
