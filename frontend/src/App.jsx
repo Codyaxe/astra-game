@@ -90,22 +90,33 @@ export default function App() {
 
   /**
    * Generates a dynamic session playlist:
-   * 1. Aries is ALWAYS Stage 1 (Tutorial).
-   * 2. Remaining stages are randomly selected and shuffled from the database seed.
+   * 1. Attempt 1 / First Start: Aries is Stage 1 (Tutorial).
+   * 2. Subsequent Attempts (Attempt 2, 3) or Completed runs: Restarts WITHOUT Aries from the 11 non-tutorial constellations.
    * 3. Length of playlist conforms to gameSettings.levelsPerSession (default: 3).
    */
-  const generateSessionPlaylist = useCallback(() => {
+  const generateSessionPlaylist = useCallback((includeAries = true) => {
     const allPool = constellations.length > 0 ? constellations : DEFAULT_CONSTELLATIONS;
     const aries = allPool.find((c) => c.name?.toLowerCase().includes('aries')) || allPool[0];
-    const others = allPool.filter((c) => c !== aries);
+    const nonAries = allPool.filter((c) => !c.name?.toLowerCase().includes('aries'));
 
-    // Fisher-Yates shuffle remaining constellations
-    const shuffled = [...others].sort(() => Math.random() - 0.5);
-
+    // Fisher-Yates shuffle non-Aries constellations
+    const shuffled = [...nonAries].sort(() => Math.random() - 0.5);
     const totalLevels = Math.max(1, Math.min(gameSettings.levelsPerSession || 3, allPool.length));
-    const chosenList = [aries, ...shuffled.slice(0, totalLevels - 1)];
 
-    console.log('%c[ASTRA] 🌌 Generated Session Playlist:', 'color: #38bdf8; font-weight: bold;', chosenList.map((c, i) => `${i + 1}. ${c.name}`));
+    let chosenList;
+    if (includeAries && aries) {
+      // First attempt / tutorial: Aries is always Stage 1
+      chosenList = [aries, ...shuffled.slice(0, totalLevels - 1)];
+    } else {
+      // Subsequent attempts / retries after completion: 100% non-Aries stages
+      chosenList = shuffled.slice(0, totalLevels);
+    }
+
+    console.log(
+      `%c[ASTRA] 🌌 Generated Session Playlist (${includeAries ? 'Aries Included' : 'WITHOUT Aries'}):`,
+      'color: #38bdf8; font-weight: bold;',
+      chosenList.map((c, i) => `${i + 1}. ${c.name}`)
+    );
     setSessionPlaylist(chosenList);
     return chosenList;
   }, [constellations, gameSettings.levelsPerSession]);
@@ -115,9 +126,11 @@ export default function App() {
   const handleRegistered = useCallback((playerData, attemptsRemaining) => {
     setPlayer(playerData);
     const rem = attemptsRemaining !== undefined ? attemptsRemaining : 3;
-    setAttemptNumber(Math.max(1, 4 - rem));
+    const currentAttempt = Math.max(1, 4 - rem);
+    setAttemptNumber(currentAttempt);
     setSessionStageScores([]);
-    generateSessionPlaylist();
+    // If player already used attempts (Attempt 2 or 3), start without Aries; otherwise include Aries
+    generateSessionPlaylist(currentAttempt <= 1);
     setConstellationIndex(0);
     setScreen('loading');
   }, [generateSessionPlaylist]);
@@ -136,7 +149,7 @@ export default function App() {
     setPlayer(guestPlayer);
     setAttemptNumber(1);
     setSessionStageScores([]);
-    generateSessionPlaylist();
+    generateSessionPlaylist(true);
     setConstellationIndex(0);
     setScreen('loading');
   }, [generateSessionPlaylist]);
@@ -278,8 +291,24 @@ export default function App() {
     setScreen('challenge_fail');
   }, []);
 
-  const handleRetryNextAttempt = useCallback(() => {
+  // 1. Crash / Timeout Retry: Resumes progress and goes back to the SAME constellation
+  const handleRetryFailedStage = useCallback(() => {
     setIsScoreExiting(false);
+    setLastAttemptResult(null);
+    const nextAttempt = attemptNumber + 1;
+    setAttemptNumber(nextAttempt);
+    console.log('%c[ASTRA] 🔄 Resuming Crashed Constellation:', 'color: #38bdf8; font-weight: bold;', {
+      attempt: nextAttempt,
+      stage: `${constellationIndex + 1} / ${activePlaylist.length}`,
+      constellation: activePlaylist[constellationIndex]?.name,
+    });
+    setScreen('loading');
+  }, [attemptNumber, constellationIndex, activePlaylist]);
+
+  // 2. Full Session Complete / Leaderboard Retry: Restarts a new session WITHOUT Aries (the tutorial)
+  const handleRestartNewSession = useCallback(() => {
+    setIsScoreExiting(false);
+    setLastAttemptResult(null);
     setSessionStageScores([]);
     setSessionTelemetry({
       total_time_sec: 0,
@@ -288,11 +317,14 @@ export default function App() {
       stage_count: 0,
     });
     setLivePlayerRank(null);
-    setAttemptNumber((prev) => prev + 1);
-    generateSessionPlaylist();
+    const nextAttempt = attemptNumber + 1;
+    setAttemptNumber(nextAttempt);
+    // Restart session playlist WITHOUT Aries
+    generateSessionPlaylist(false);
     setConstellationIndex(0);
-    setScreen('challenge');
-  }, [generateSessionPlaylist]);
+    console.log('%c[ASTRA] 🚀 Starting New Session Run (Attempt #' + nextAttempt + ') without Aries!', 'color: #facc15; font-weight: bold;');
+    setScreen('loading');
+  }, [attemptNumber, generateSessionPlaylist]);
 
   const handleReturnToTitle = useCallback(() => {
     setIsScoreExiting(false);
@@ -475,7 +507,11 @@ export default function App() {
           continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < activePlaylist.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
           isExiting={isScoreExiting}
           onExitComplete={() => setIsScoreExiting(false)}
-          onTryAgain={(lastAttemptResult?.attempts_remaining ?? (3 - attemptNumber)) > 0 ? handleRetryNextAttempt : null}
+          onTryAgain={
+            (lastAttemptResult?.attempts_remaining ?? (3 - attemptNumber)) > 0
+              ? (screen === 'challenge_fail' ? handleRetryFailedStage : handleRestartNewSession)
+              : null
+          }
           onContinue={() => {
             console.log('%c[ASTRA DIAGNOSTIC] 🚀 App.jsx onContinue triggered!', 'color: #4ade80; font-weight: bold;', {
               currentScreen: screen,
@@ -503,7 +539,7 @@ export default function App() {
         <LeaderboardScreen
           player={player}
           lastAttemptResult={lastAttemptResult}
-          onRetry={handleRetryNextAttempt}
+          onRetry={handleRestartNewSession}
           onReturnToTitle={handleReturnToTitle}
         />
       )}

@@ -698,8 +698,11 @@ export default function ChallengeScreen({
     prevPointerRef.current = currentPtr;
   }, [pointer, mouseWand]);
 
-  // Briefing State: Voiceover & ghost tracing animation only play on Tutorial Stage (Aries / stage 0)
-  const isTutorialStage = constellationIndex === 0 || constellationData?.name?.toLowerCase().includes('aries');
+  // Briefing State: Voiceover & ghost tracing animation only play on Attempt 1 Tutorial Stage (Aries)
+  const isTutorialStage =
+    attemptNumber === 1 &&
+    constellationIndex === 0 &&
+    Boolean(constellationData?.name?.toLowerCase().includes('aries'));
   const [isBriefingActive, setIsBriefingActive] = useState(isTutorialStage);
 
   const handleSkipBriefing = useCallback(() => {
@@ -721,15 +724,17 @@ export default function ChallengeScreen({
 
     if (isTutorialStage) {
       setIsBriefingActive(true);
-      console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Starting Tutorial Stage Briefing Voiceover...', 'color: #38bdf8; font-weight: bold;');
+      console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Starting Tutorial Stage Briefing Voiceover (Attempt 1 Aries)...', 'color: #38bdf8; font-weight: bold;');
       // Play Ship AI Phase A & B Voiceovers during tutorial entrance briefing
       playSequence([...DIALOGUE_CONFIG.phaseA, ...DIALOGUE_CONFIG.phaseB], () => {
         console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Entrance Voiceover audio finished.', 'color: #70a1ff;');
       });
     } else {
       setIsBriefingActive(false);
+      stopDialogue();
       startTimeRef.current = Date.now();
       startTimer();
+      console.log('%c[ASTRA DIAGNOSTIC] ⚡ Reattempt / Regular Constellation -> Briefing bypassed, gameplay active immediately!', 'color: #4ade80;');
     }
 
     if (player?.id && constellationData?.id) {
@@ -746,7 +751,7 @@ export default function ChallengeScreen({
       window.removeEventListener('resize', onResize);
       stopDialogue();
     };
-  }, [constellationData?.id, attemptNumber, isTutorialStage]);
+  }, [isTutorialStage, constellationData?.id, player?.id, playSequence, startTimer, stopDialogue]);
 
   // Calculate presentation scale and opacity (Entrance Arrival Easing + Win Fly-by Turn)
   let layerScale = 1.0;
