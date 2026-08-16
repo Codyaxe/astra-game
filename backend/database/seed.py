@@ -15,7 +15,7 @@ CONSTELLATIONS = [
     {
         "name": "Aries",
         "head_node_id": 0,
-        "time_limit_sec": 20,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Hamal (A)",   "x": 0.30, "y": 0.40, "next_node_id": 1,    "hitbox_radius": 0.055},
             {"id": 1, "label": "Sheratan (B)","x": 0.45, "y": 0.35, "next_node_id": 2,    "hitbox_radius": 0.055},
@@ -71,7 +71,7 @@ CONSTELLATIONS = [
     {
         "name": "Gemini",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Castor",     "x": 0.38, "y": 0.20, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Pollux",     "x": 0.55, "y": 0.22, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -91,7 +91,7 @@ CONSTELLATIONS = [
     {
         "name": "Taurus",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Aldebaran", "x": 0.52, "y": 0.48, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Elnath",    "x": 0.38, "y": 0.28, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -112,7 +112,7 @@ CONSTELLATIONS = [
     {
         "name": "Libra",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Zubeneschamali", "x": 0.50, "y": 0.25, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Zubenelgenubi",  "x": 0.32, "y": 0.45, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -131,7 +131,7 @@ CONSTELLATIONS = [
     {
         "name": "Leo",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Regulus",   "x": 0.25, "y": 0.52, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Algieba",   "x": 0.40, "y": 0.38, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -173,7 +173,7 @@ CONSTELLATIONS = [
     {
         "name": "Cassiopeia",
         "head_node_id": 0,
-        "time_limit_sec": 20,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Schedar",   "x": 0.18, "y": 0.42, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Caph",      "x": 0.34, "y": 0.25, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -192,7 +192,7 @@ CONSTELLATIONS = [
     {
         "name": "Cygnus",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Deneb",      "x": 0.50, "y": 0.18, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Sadr",       "x": 0.50, "y": 0.45, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -234,7 +234,7 @@ CONSTELLATIONS = [
     {
         "name": "Canis Major",
         "head_node_id": 0,
-        "time_limit_sec": 25,
+        "time_limit_sec": 30,
         "star_nodes": [
             {"id": 0, "label": "Sirius",      "x": 0.48, "y": 0.25, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Mirzam",      "x": 0.30, "y": 0.42, "next_node_id": 2, "hitbox_radius": 0.055},
