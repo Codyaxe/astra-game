@@ -15,6 +15,8 @@ export default function ScoreOverlay({
   telemetry = null,
   rankPlacement = 1,
   remainingAttempts = 2,
+  onTryAgain = null,
+  onContinue = null,
   onRestart = null,
   isExiting = false,
   onExitComplete = null,
@@ -195,7 +197,7 @@ export default function ScoreOverlay({
           {courseText}
         </div>
 
-        {/* Holographic Telemetry 3-Column Grid (Glowing Hologram Divider Lines) */}
+        {/* Holographic Telemetry 3-Column Grid */}
         <div
           style={{
             borderTop: `1.5px solid ${themeColor}`,
@@ -261,54 +263,73 @@ export default function ScoreOverlay({
           </div>
         </div>
 
-        {/* Remaining Attempts Footer */}
-        <div
-          style={{
-            fontSize: '0.95rem',
-            color: '#FF3B30',
-            fontWeight: 800,
-            letterSpacing: '1px',
-            marginBottom: '26px',
-            textShadow: '0 0 12px rgba(255, 59, 48, 0.7)',
-          }}
-        >
-          remaining attempts : {remainingAttempts}
-        </div>
+        {/* Dual Holographic Action Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+          {/* Button 1: TRY AGAIN (if attempts remain) */}
+          {remainingAttempts > 0 && (onTryAgain || onRestart) && (
+            <button
+              onClick={onTryAgain || onRestart}
+              style={{
+                width: '100%',
+                padding: '13px 24px',
+                backgroundColor: themeColor,
+                color: '#050916',
+                border: `2px solid ${themeColor}`,
+                borderRadius: '30px',
+                fontWeight: 900,
+                fontSize: '0.92rem',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: `0 0 25px ${glowColor}`,
+                transition: 'all 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              TRY AGAIN ({remainingAttempts} {remainingAttempts === 1 ? 'ATTEMPT' : 'ATTEMPTS'} LEFT)
+            </button>
+          )}
 
-        {/* Holographic Outline Action Button */}
-        {onRestart && (
-          <button
-            onClick={onRestart}
-            style={{
-              width: '100%',
-              padding: '14px 28px',
-              backgroundColor: 'rgba(5, 9, 22, 0.4)',
-              color: themeColor,
-              border: `2px solid ${themeColor}`,
-              borderRadius: '30px',
-              fontWeight: 800,
-              fontSize: '0.95rem',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              boxShadow: `0 0 25px ${glowColor}, inset 0 0 10px ${bgGlowColor}`,
-              textShadow: `0 0 8px ${themeColor}`,
-              transition: 'all 0.25s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = themeColor;
-              e.currentTarget.style.color = '#050916';
-              e.currentTarget.style.textShadow = 'none';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(5, 9, 22, 0.4)';
-              e.currentTarget.style.color = themeColor;
-              e.currentTarget.style.textShadow = `0 0 8px ${themeColor}`;
-            }}
-          >
-            RETURN TO BASE
-          </button>
-        )}
+          {/* Button 2: CONTINUE / RETURN TO BASE */}
+          {(onContinue || onRestart) && (
+            <button
+              onClick={onContinue || onRestart}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                backgroundColor: 'rgba(5, 9, 22, 0.4)',
+                color: themeColor,
+                border: `1.5px solid ${themeColor}`,
+                borderRadius: '30px',
+                fontWeight: 800,
+                fontSize: '0.9rem',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: `0 0 15px ${glowColor}, inset 0 0 10px ${bgGlowColor}`,
+                textShadow: `0 0 8px ${themeColor}`,
+                transition: 'all 0.25s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = themeColor;
+                e.currentTarget.style.color = '#050916';
+                e.currentTarget.style.textShadow = 'none';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(5, 9, 22, 0.4)';
+                e.currentTarget.style.color = themeColor;
+                e.currentTarget.style.textShadow = `0 0 8px ${themeColor}`;
+              }}
+            >
+              {onRestart ? 'RETURN TO BASE' : 'CONTINUE ⮞'}
+            </button>
+          )}
+        </div>
       </div>
       </HoloDeactivate>
     </div>

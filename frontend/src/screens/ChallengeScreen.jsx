@@ -81,14 +81,16 @@ export default function ChallengeScreen({
 
   const starNodes = useMemo(() => {
     const listStars = constellationList?.getAllStarNodes() || [];
-    if (listStars.length > 0) return listStars;
-    return constellationData?.star_nodes || constellationData?.stars || PLACEHOLDER_STARS;
+    if (listStars.length > 0) return listStars.map((s) => ({ ...s, isFake: false }));
+    const raw = constellationData?.star_nodes || constellationData?.stars || PLACEHOLDER_STARS;
+    return raw.map((s) => ({ ...s, isFake: false }));
   }, [constellationList, constellationData]);
 
   const fakeNodes = useMemo(() => {
     const listFakes = constellationList?.getAllFakeNodes() || [];
-    if (listFakes.length > 0) return listFakes;
-    return constellationData?.fake_nodes || constellationData?.fake_stars || [];
+    if (listFakes.length > 0) return listFakes.map((s) => ({ ...s, isFake: true }));
+    const raw = constellationData?.fake_nodes || constellationData?.fake_stars || [];
+    return raw.map((s) => ({ ...s, isFake: true }));
   }, [constellationList, constellationData]);
 
   // Target valid connection guides for testing visualization & logic validation
@@ -453,8 +455,13 @@ export default function ChallengeScreen({
         />
       )}
 
-      {/* Upper Right Timer HUD */}
-      {winFlybyProgress === null && <HUD timeLeft={timeLeft} />}
+      {/* Upper Cockpit HUD: Constellation Badge (Left) + Timer (Right) */}
+      {winFlybyProgress === null && (
+        <HUD
+          timeLeft={timeLeft}
+          constellationName={constellationData?.name || constellationList?.name || 'Orion (Demo)'}
+        />
+      )}
     </div>
   );
 }

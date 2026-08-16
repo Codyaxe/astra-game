@@ -70,9 +70,9 @@ export default function useMouseWandAdapter({
     [stars]
   );
 
-  // Threshold for mousedown origin detection
+  // Threshold for mousedown origin detection — requires clicking directly on/near star node
   const findOriginStar = useCallback(
-    (normX, normY) => findNearestStar(normX, normY, 0.07),
+    (normX, normY) => findNearestStar(normX, normY, 0.045),
     [findNearestStar]
   );
 
@@ -121,16 +121,14 @@ export default function useMouseWandAdapter({
       isMouseDownRef.current = true;
 
       if (originStar) {
-        // Anchored to star center in mapped screen space
         setActiveStarId(originStar.id);
         activeStarRef.current = originStar;
-        const starPos = getStarScreenNorm(originStar.x, originStar.y);
-        pathRef.current = [{ x: starPos.x, y: starPos.y }];
       } else {
-        // Free draw from empty space
         activeStarRef.current = null;
-        pathRef.current = [{ x: normX, y: normY }];
       }
+
+      // Drawing path ALWAYS starts at exact cursor click location (no pre-snap line from star center)
+      pathRef.current = [{ x: normX, y: normY }];
 
       setDrawingPath([...pathRef.current]);
       setWandPointer({ x: normX, y: normY, isDrawing: true, state: 'drawing' });

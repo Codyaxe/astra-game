@@ -80,14 +80,17 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
       winStartTimeRef.current = Date.now();
       phase2TeleportedRef.current = false;
       warpSpeedRef.current = 0.5; // Start slow for gradual ramp-up
-    } else if (state === 'warping' && prevState !== 'warping') {
+    } else if (state !== 'sustained_warp') {
+      winStartTimeRef.current = null;
+      phase2TeleportedRef.current = false;
+    }
+
+    if (state === 'warping' && prevState !== 'warping') {
       warpSpeedRef.current = 1.2;          // Start from idle cruise — cubic ease-in begins now
       warpStartTimeRef.current = Date.now(); // Record acceleration start time
       phase2TeleportedRef.current = false;
     } else if (state === 'idle' && prevState !== 'idle') {
       warpSpeedRef.current = 1.2;
-      winStartTimeRef.current = null;
-      phase2TeleportedRef.current = false;
     }
 
     if (state === 'frozen') {

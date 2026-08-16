@@ -265,43 +265,53 @@ export default function ConstellationLayer({
 
       {/* 4. Star Nodes with Star ID Labels */}
       {Array.from(starMap.values()).map((star) => {
+        const isFake = Boolean(star.isFake || star.fake);
         const isActive = star.id === activeStarId;
         const isConnected = connectedSegments.some(
           (s) => s.from === star.id || s.to === star.id
         );
 
-        const nodeRadius = (isActive ? 28 : isConnected ? 22 : 16) * scale;
-        const coreRadius = (isActive ? 5 : 3.5) * scale;
+        const nodeRadius = (isActive ? 28 : isConnected ? 22 : isFake ? 14 : 16) * scale;
+        const coreRadius = (isActive ? 5 : isFake ? 2.5 : 3.5) * scale;
 
         return (
           <g key={`star-${star.id}`} transform={`translate(${star.x}, ${star.y})`}>
             {/* Outer Aura Glow */}
             <circle
               r={nodeRadius}
-              fill="url(#star-aura)"
+              fill={isFake ? "rgba(148, 163, 184, 0.18)" : "url(#star-aura)"}
               className="star-node-aura"
             />
 
-            {/* Diamond Starlight Asset */}
-            <polygon
-              points={`${0 * scale},${-10 * scale} ${3 * scale},${-3 * scale} ${10 * scale},${0 * scale} ${3 * scale},${3 * scale} ${0 * scale},${10 * scale} ${-3 * scale},${3 * scale} ${-10 * scale},${0 * scale} ${-3 * scale},${-3 * scale}`}
-              fill={isConnected || isActive ? '#F4D58D' : '#F1F0EC'}
-            />
-
-            {/* Inner Core */}
-            <circle r={coreRadius} fill="#FFFFFF" />
+            {isFake ? (
+              /* White Dwarf Dead Star Asset — Small, dense, cold pale cyan-gray core with dashed icy ring */
+              <g>
+                <circle r={8 * scale} fill="none" stroke="#64748B" strokeWidth="1" strokeDasharray="3 2" opacity="0.65" />
+                <circle r={4.5 * scale} fill="#94A3B8" opacity="0.85" />
+                <circle r={2.2 * scale} fill="#E2E8F0" />
+              </g>
+            ) : (
+              /* 4-Point Starlight Diamond Flare Asset */
+              <g>
+                <polygon
+                  points={`${0 * scale},${-10 * scale} ${3 * scale},${-3 * scale} ${10 * scale},${0 * scale} ${3 * scale},${3 * scale} ${0 * scale},${10 * scale} ${-3 * scale},${3 * scale} ${-10 * scale},${0 * scale} ${-3 * scale},${-3 * scale}`}
+                  fill={isConnected || isActive ? '#F4D58D' : '#F1F0EC'}
+                />
+                <circle r={coreRadius} fill="#FFFFFF" />
+              </g>
+            )}
 
             {/* Star ID Badge Label */}
             <text
               y={nodeRadius + 15}
               textAnchor="middle"
-              fill={isConnected || isActive ? '#F4D58D' : '#94A3B8'}
+              fill={isFake ? '#64748B' : (isConnected || isActive ? '#F4D58D' : '#94A3B8')}
               fontSize="12"
               fontWeight="bold"
               fontFamily="sans-serif"
               style={{ pointerEvents: 'none', userSelect: 'none' }}
             >
-              #{star.id} {star.label ? `(${star.label})` : ''}
+              #{star.id} {star.label ? `(${star.label})` : isFake ? '(White Dwarf)' : ''}
             </text>
           </g>
         );

@@ -317,6 +317,26 @@ export default function App() {
     setScreen('challenge');
   };
 
+  const [scoreExitTarget, setScoreExitTarget] = useState('leaderboard');
+
+  const handleScoreTryAgain = useCallback(() => {
+    setScoreExitTarget('challenge');
+    setIsScoreExiting(true);
+  }, []);
+
+  const handleScoreContinue = useCallback(() => {
+    setScoreExitTarget('leaderboard');
+    setIsScoreExiting(true);
+  }, []);
+
+  const handleScoreExitComplete = useCallback(() => {
+    if (scoreExitTarget === 'challenge') {
+      handleRetryNextAttempt();
+    } else {
+      setScreen('leaderboard');
+    }
+  }, [scoreExitTarget, handleRetryNextAttempt]);
+
   // Screen router rendering helper
   const renderScreen = () => {
     switch (screen) {
@@ -402,9 +422,10 @@ export default function App() {
             player={player}
             telemetry={lastAttemptResult?.telemetry}
             remainingAttempts={Math.max(0, 3 - attemptNumber)}
-            onRestart={() => setIsScoreExiting(true)}
+            onTryAgain={handleScoreTryAgain}
+            onContinue={handleScoreContinue}
             isExiting={isScoreExiting}
-            onExitComplete={() => setScreen('leaderboard')}
+            onExitComplete={handleScoreExitComplete}
           />
         );
 
@@ -420,9 +441,10 @@ export default function App() {
             player={player}
             telemetry={lastAttemptResult?.telemetry}
             remainingAttempts={Math.max(0, 3 - attemptNumber)}
-            onRestart={() => setIsScoreExiting(true)}
+            onTryAgain={handleScoreTryAgain}
+            onContinue={handleScoreContinue}
             isExiting={isScoreExiting}
-            onExitComplete={() => setScreen('leaderboard')}
+            onExitComplete={handleScoreExitComplete}
           />
         );
 

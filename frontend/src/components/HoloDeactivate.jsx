@@ -1,26 +1,17 @@
 /**
- * HoloDeactivate.jsx -- Reusable Holographic Deactivation Wrapper
+ * HoloDeactivate.jsx -- Reusable Holographic Projection Container
  *
- * Wraps any overlay/screen and plays a 3-phase hologram power-off animation
- * when `isExiting` becomes true:
+ * Project-In (Mounting):
+ *   Starts as a central cyan laser line, unfolds vertically with RGB glitch bloom, and locks crisp.
  *
- *   Phase 1 -- "Glitching"  (0ms   -> 350ms): RGB chromatic aberration + scan-line flicker
- *   Phase 2 -- "Collapsing" (350ms -> 650ms): content collapses vertically to a bright cyan line
- *   Phase 3 -- "Flash"      (650ms -> 850ms): that line pulses and fades out
- *   Done                    (850ms):           onExitComplete fires -> parent unmounts
- *
- * Usage:
- *   <HoloDeactivate isExiting={isExiting} onExitComplete={onExitComplete}>
- *     <YourOverlayContent />
- *   </HoloDeactivate>
- *
- * The parent is responsible for unmounting after onExitComplete fires.
- * HoloDeactivate renders null from "done" onward as a safety fallback.
+ * Power-Off (Exiting):
+ *   Glitching (350ms) -> Vertical Collapse (300ms) -> Cyan Flash Snap (200ms) -> onExitComplete().
  */
 
 import { useEffect, useRef, useState } from 'react';
 
 const PHASE_DURATIONS = {
+  projecting: 550,
   glitching:  350,
   collapsing: 300,
   flash:      200,
@@ -28,16 +19,29 @@ const PHASE_DURATIONS = {
 
 export default function HoloDeactivate({
   isExiting = false,
+  animateEntry = true,
   onExitComplete,
   children,
   className = '',
   style = {},
 }) {
-  const [phase, setPhase] = useState('idle');
+  const [phase, setPhase] = useState(() => (animateEntry ? 'projecting' : 'idle'));
   const timersRef = useRef([]);
 
+  // Handle Project-In (Mounting) transition
   useEffect(() => {
-    if (!isExiting || phase !== 'idle') return;
+    if (!animateEntry || phase !== 'projecting') return;
+
+    const timer = setTimeout(() => {
+      setPhase('idle');
+    }, PHASE_DURATIONS.projecting);
+
+    return () => clearTimeout(timer);
+  }, [animateEntry]);
+
+  // Handle Power-Off (Exit) transition
+  useEffect(() => {
+    if (!isExiting || (phase !== 'idle' && phase !== 'projecting')) return;
 
     const clear = () => timersRef.current.forEach(clearTimeout);
     clear();
@@ -62,7 +66,7 @@ export default function HoloDeactivate({
     <div
       className={`holo-deactivate holo-deactivate--${phase} ${className}`}
       style={style}
-      aria-hidden={phase !== 'idle' ? true : undefined}
+      aria-hidden={phase === 'done' || phase === 'flash' ? true : undefined}
     >
       {children}
       <div className="holo-deactivate__scanlines" aria-hidden="true" />
