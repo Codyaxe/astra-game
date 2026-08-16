@@ -46,7 +46,7 @@ html, body, #root {
 .title-content { position: relative; z-index: 1; text-align: center; }
 .title-logo {
   font-size: clamp(2.5rem, 6vw, 4.8rem);
-  font-weight: 700;
+  font-weight: 300;
   background: linear-gradient(135deg, var(--clr-accent), #facc15);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -781,7 +781,8 @@ html, body, #root {
 .lb-search-count {
   font-size: 0.82rem;
   color: var(--clr-text-dim);
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1rem 5px;
+  margin-bottom: 0.85rem; /* small pixel margin on bottom */
 }
 
 /* ===== Leaderboard Table (Ranks 4+) ===== */

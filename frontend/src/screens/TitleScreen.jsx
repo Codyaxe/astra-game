@@ -65,7 +65,7 @@ export default function TitleScreen({
   return (
     <div className="screen screen--title" style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <canvas ref={canvasRef} className="title-canvas" style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
-      
+
       {/* Top Bar for Admin & Leaderboard */}
       <div style={{ position: 'absolute', top: 20, right: 24, zIndex: 10, display: 'flex', gap: 12 }}>
         <button
@@ -116,7 +116,7 @@ export default function TitleScreen({
           </div>
         </div>
 
-        <h1 className="title-logo" style={{ fontSize: 'clamp(2.6rem, 6vw, 4.8rem)', fontWeight: 900, background: 'linear-gradient(135deg, #fff 0%, #f4d58d 60%, #e0a96d 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: 3 }}>
+        <h1 className="title-logo" style={{ fontSize: 'clamp(2.6rem, 6vw, 4.8rem)', fontWeight: 500, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', margin: 0, letterSpacing: 3 }}>
           STAR LINK
         </h1>
         <p style={{ color: '#94a3b8', fontSize: 16, margin: 0, letterSpacing: 1 }}>
@@ -131,8 +131,8 @@ export default function TitleScreen({
               width: '100%',
               padding: '16px 20px',
               borderRadius: 16,
-              border: '1px solid rgba(244, 213, 141, 0.5)',
-              background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+              border: '1px solid rgba(78, 65, 189, 0.5)',
+              background: 'linear-gradient(135deg, #140f57ff 0%, #3730a3 100%)',
               color: '#ffffff',
               fontSize: 16,
               fontWeight: 800,
