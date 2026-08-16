@@ -383,6 +383,135 @@ html, body, #root {
   margin-top: 0.3rem;
 }
 
+/* ===== Player Summary Card ===== */
+.player-summary-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+  background: rgba(19, 24, 41, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(108, 99, 255, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 2.2rem 2.6rem;
+  min-height: 150px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 25px rgba(108, 99, 255, 0.12);
+  animation: lb-fade-in 0.5s ease-out 0.15s both;
+}
+.player-summary-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.12), transparent 60%);
+  pointer-events: none;
+}
+.player-summary-info {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.player-summary-info h3 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.2rem;
+}
+.player-summary-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  color: var(--clr-text-dim);
+}
+.player-summary-detail strong {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+/* Attempt progress bar in summary card */
+.lb-attempts {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+}
+.lb-attempts-bar {
+  flex: 1;
+  max-width: 220px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.lb-attempts-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease-out;
+}
+.lb-attempts-fill--ok   { background: var(--clr-success); box-shadow: 0 0 8px rgba(74, 222, 128, 0.4); }
+.lb-attempts-fill--warn { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+.lb-attempts-fill--full { background: var(--clr-danger); box-shadow: 0 0 8px rgba(248, 113, 113, 0.4); }
+.lb-attempts-text {
+  font-size: 0.85rem;
+  color: var(--clr-text-dim);
+  white-space: nowrap;
+}
+
+.player-score-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.player-score-value {
+  font-size: 2.6rem;
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(135deg, #facc15, #f59e0b, #4ade80);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.4));
+}
+.player-score-label {
+  font-size: 0.75rem;
+  color: var(--clr-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 0.35rem;
+  font-weight: 700;
+}
+
+.player-summary-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+.player-summary-qr .ticket-thumb {
+  width: 96px;
+  height: 96px;
+  background: #ffffff;
+  padding: 6px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  display: block;
+}
+.player-summary-qr .qr-hint {
+  font-size: 0.75rem;
+  color: var(--clr-text-dim);
+  letter-spacing: 0.5px;
+  font-family: monospace;
+}
+
 /* ===== Stats Bar ===== */
 .lb-stats-bar {
   display: flex;
