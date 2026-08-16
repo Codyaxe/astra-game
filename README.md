@@ -96,6 +96,49 @@ npm run preview
 | **Circle Motion** | Full 360° circular sweep | Emergency Force Exit to Leaderboard |
 | **Up / Down Shake** | Rapid up-and-down shaking | Recalibrates wand baseline tracking |
 
-## Security
+---
+
+## 🌌 Adding or Modifying Constellations
+
+Constellations are stored in MySQL using a Linked List structure. To add or adjust constellations:
+
+### 1. Edit `backend/database/seed.py`
+Append your constellation dictionary to the `CONSTELLATIONS` list:
+
+```python
+{
+    "name": "Pegasus",
+    "head_node_id": 0,
+    "time_limit_sec": 90,
+    "star_nodes": [
+        {"id": 0, "label": "Markab",    "x": 0.35, "y": 0.30, "next_node_id": 1,    "hitbox_radius": 0.055},
+        {"id": 1, "label": "Scheat",    "x": 0.32, "y": 0.55, "next_node_id": 2,    "hitbox_radius": 0.055},
+        {"id": 2, "label": "Alpheratz", "x": 0.60, "y": 0.58, "next_node_id": 3,    "hitbox_radius": 0.055},
+        {"id": 3, "label": "Algenib",   "x": 0.62, "y": 0.32, "next_node_id": null, "hitbox_radius": 0.055},
+    ],
+    "fake_nodes": [
+        # IDs for decoy/fake stars must be >= 100
+        {"id": 100, "x": 0.22, "y": 0.40, "hitbox_radius": 0.045},
+        {"id": 101, "x": 0.70, "y": 0.45, "hitbox_radius": 0.045},
+    ]
+}
+```
+
+> **Guidelines:**
+> - `x` and `y` are normalized ratios from `0.1` to `0.9` (matching cockpit screen space).
+> - `next_node_id`: ID of the next connecting star (`null` for the terminal star).
+> - `fake_nodes` (decoy stars): Must have IDs $\ge 100$.
+
+### 2. Run the Seed Command
+In your backend terminal, execute:
+```powershell
+python -c "from database.seed import seed; seed()"
+```
+
+The new constellation will automatically be loaded into MySQL, included in the randomized session playlists, and made instantly testable in the **Admin Dashboard > Constellation Lab** tab.
+
+---
+
+## 🔒 Security
 
 Please **change** the Flask Secret Key when online deployment is considered.
