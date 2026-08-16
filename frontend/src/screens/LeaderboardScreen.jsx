@@ -11,7 +11,7 @@ const PODIUM_CLASSES = ['lb-podium-card--gold', 'lb-podium-card--silver', 'lb-po
 
 const PAGE_SIZE = 5;
 
-export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, onReturnToTitle }) {
+export default function LeaderboardScreen({ player, lastAttemptResult, attemptNumber = 1, onRetry, onReturnToTitle }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,9 +40,9 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
     currentPlayerRow?.attempts_used ??
     lastAttemptResult?.attempts_used ??
     player?.total_attempts_used ??
-    0;
+    attemptNumber;
 
-  const attemptsRemaining = Math.max(0, 3 - attemptsUsed);
+  const attemptsRemaining = Math.max(0, 3 - attemptNumber);
 
   const bestScore =
     currentPlayerRow?.highest_score ??

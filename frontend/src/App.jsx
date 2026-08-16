@@ -518,12 +518,12 @@ export default function App() {
           player={player}
           telemetry={sessionTelemetry}
           rankPlacement={livePlayerRank}
-          remainingAttempts={lastAttemptResult?.attempts_remaining ?? Math.max(0, 3 - attemptNumber)}
+          remainingAttempts={Math.max(0, 3 - attemptNumber)}
           continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < activePlaylist.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
           isExiting={isScoreExiting}
           onExitComplete={() => setIsScoreExiting(false)}
           onTryAgain={
-            (lastAttemptResult?.attempts_remaining ?? (3 - attemptNumber)) > 0
+            attemptNumber < 3
               ? (screen === 'challenge_fail' ? handleRetryFailedStage : handleRestartNewSession)
               : null
           }
@@ -554,7 +554,8 @@ export default function App() {
         <LeaderboardScreen
           player={player}
           lastAttemptResult={lastAttemptResult}
-          onRetry={handleRestartNewSession}
+          attemptNumber={attemptNumber}
+          onRetry={attemptNumber < 3 ? handleRestartNewSession : null}
           onReturnToTitle={handleReturnToTitle}
         />
       )}
