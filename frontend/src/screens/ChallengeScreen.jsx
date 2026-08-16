@@ -535,14 +535,165 @@ export default function ChallengeScreen({
     layerOpacity = easeOut;
   }
 
+  // Admin Controls Testing State
+  const [controlMode, setControlMode] = useState('hybrid'); // 'mouse' | 'wand' | 'hybrid'
+  const [showCamPip, setShowCamPip] = useState(false);
+  const [showAdminHud, setShowAdminHud] = useState(true);
+
+  const activePointer =
+    controlMode === 'mouse' ? mouseWand
+    : controlMode === 'wand' ? (snappedPointer || pointer)
+    : (mouseWand || snappedPointer || pointer);
+
   return (
     <div className="screen screen--challenge">
+      {/* Hidden/PIP Hardware Webcam Feed for MediaPipe Hands */}
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          width: showCamPip ? 220 : 1,
+          height: showCamPip ? 165 : 1,
+          opacity: showCamPip ? 0.95 : 0.001,
+          pointerEvents: showCamPip ? 'auto' : 'none',
+          borderRadius: 14,
+          border: showCamPip ? '2px solid #818cf8' : 'none',
+          boxShadow: showCamPip ? '0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(99,102,241,0.4)' : 'none',
+          zIndex: 99999,
+          transform: 'scaleX(-1)', // Mirror user perspective
+          transition: 'all 0.25s ease',
+          backgroundColor: '#000',
+        }}
+      />
+
+      {/* Admin Testing Controls HUD Pill (Top Center) */}
+      {winFlybyProgress === null && showAdminHud && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 14,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'rgba(11, 15, 28, 0.88)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid rgba(129, 140, 248, 0.35)',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.2)',
+            borderRadius: 30,
+            padding: '6px 14px',
+            fontSize: 12,
+            fontFamily: "'Outfit', sans-serif",
+            color: '#f8fafc',
+            userSelect: 'none',
+          }}
+        >
+          <span style={{ fontWeight: 800, color: '#818cf8', letterSpacing: 1 }}>⚙️ INPUT:</span>
+          
+          <button
+            onClick={() => setControlMode('mouse')}
+            style={{
+              background: controlMode === 'mouse' ? '#6366f1' : 'rgba(255,255,255,0.06)',
+              color: controlMode === 'mouse' ? '#fff' : '#94a3b8',
+              border: 'none',
+              borderRadius: 20,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            🖱️ Mouse
+          </button>
+
+          <button
+            onClick={() => setControlMode('wand')}
+            style={{
+              background: controlMode === 'wand' ? '#6366f1' : 'rgba(255,255,255,0.06)',
+              color: controlMode === 'wand' ? '#fff' : '#94a3b8',
+              border: 'none',
+              borderRadius: 20,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            🪄 Motion Wand
+          </button>
+
+          <button
+            onClick={() => setControlMode('hybrid')}
+            style={{
+              background: controlMode === 'hybrid' ? '#6366f1' : 'rgba(255,255,255,0.06)',
+              color: controlMode === 'hybrid' ? '#fff' : '#94a3b8',
+              border: 'none',
+              borderRadius: 20,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            ⚡ Hybrid
+          </button>
+
+          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.15)' }} />
+
+          {/* Webcam PIP Toggle Button */}
+          <button
+            onClick={() => setShowCamPip((prev) => !prev)}
+            style={{
+              background: showCamPip ? 'rgba(74, 222, 128, 0.2)' : 'rgba(255,255,255,0.06)',
+              color: showCamPip ? '#4ade80' : '#94a3b8',
+              border: showCamPip ? '1px solid #4ade80' : '1px solid transparent',
+              borderRadius: 20,
+              padding: '4px 10px',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            📷 {showCamPip ? 'Hide Cam' : 'Show Cam'}
+          </button>
+
+          {/* Live Gesture Tracking Status Badge */}
+          <span
+            style={{
+              background: pointer ? 'rgba(74, 222, 128, 0.15)' : 'rgba(248, 113, 113, 0.15)',
+              color: pointer ? '#4ade80' : '#f87171',
+              border: `1px solid ${pointer ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`,
+              borderRadius: 12,
+              padding: '3px 8px',
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            {pointer ? `🟢 Hand Active · ${gestureStatus}` : '🔴 No Hand in Frame'}
+          </span>
+        </div>
+      )}
+
       {/* Main Presentation Layer */}
       <ConstellationLayer
         stars={[...starNodes, ...fakeNodes]}
         connectedSegments={completedConnections}
         validGuideSegments={validGuideSegments}
-        wandPointer={mouseWand || snappedPointer || pointer}
+        wandPointer={activePointer}
         activeStarId={activeNode?.id}
         drawingPath={drawingPath}
         snapEffect={snapEffect}
@@ -557,7 +708,7 @@ export default function ChallengeScreen({
       {/* Floating Wand Reticle Cursor Overlay */}
       {winFlybyProgress === null && (
         <WandCursor
-          pointer={mouseWand || snappedPointer || pointer}
+          pointer={activePointer}
           width={dimensions.w}
           height={dimensions.h}
         />

@@ -233,6 +233,23 @@ export default function App() {
       {screen === 'dashboard' && (
         <DashboardScreen
           onBack={() => setScreen('title')}
+          constellations={constellations}
+          onLaunchChallenge={(stageIdx = 0) => {
+            const adminPlayer = {
+              id: 9999,
+              first_name: 'Admin',
+              last_name: 'Tester',
+              sr_code: 'ADMIN-01',
+              course: 'BSCS',
+              department: 'CICS',
+              total_attempts_used: 0,
+              best_score: 0,
+            };
+            setPlayer(adminPlayer);
+            setAttemptNumber(1);
+            setConstellationIndex(stageIdx);
+            setScreen('challenge');
+          }}
         />
       )}
 

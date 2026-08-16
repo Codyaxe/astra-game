@@ -1,5 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
-import { Search, Trash2, RotateCcw, QrCode, RefreshCw, X, HelpCircle } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Search, Trash2, RotateCcw, QrCode, RefreshCw, X, Play, Sliders, Activity, Video, MousePointer, Sparkles } from "lucide-react";
+import { useWandGestures } from "../hooks/useWandGestures";
+import { getMagneticSnap } from "../game/snapping";
+import { playSfx } from "../utils/audio";
 
 const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
 
@@ -54,16 +57,54 @@ function Starfield() {
   );
 }
 
-export default function Dashboard({ onBack }) {
+export default function Dashboard({ onBack, onLaunchChallenge, constellations = [] }) {
+  const [activeTab, setActiveTab] = useState("lab"); // "database" | "lab"
   const [registrations, setRegistrations] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeTicket, setActiveTicket] = useState(null);
 
+  // Motion Capture Lab State
+  const [labControlMode, setLabControlMode] = useState("hybrid"); // "mouse" | "wand" | "hybrid"
+  const [selectedConstellationIdx, setSelectedConstellationIdx] = useState(0);
+  const [labConnections, setLabConnections] = useState([]);
+  const [labDrawingFrom, setLabDrawingFrom] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
+  const [isMouseDown, setIsMouseDown] = useState(false);
+
+  // Practice Star Nodes on Lab Canvas
+  const testStars = useMemo(() => [
+    { id: 1, label: "Star Alpha", x: 0.25, y: 0.3 },
+    { id: 2, label: "Star Beta", x: 0.75, y: 0.28 },
+    { id: 3, label: "Star Gamma", x: 0.8, y: 0.75 },
+    { id: 4, label: "Star Delta", x: 0.28, y: 0.72 },
+  ], []);
+
+  // Motion Capture Wand Hook
+  const { videoRef, pointer, onDraw, gestureStatus, isReady } = useWandGestures({
+    enabled: activeTab === "lab",
+    onConnectionCycleComplete: () => {
+      console.log("[LAB] 🎯 Wand Cycle Complete Detected!");
+      playSfx("snap");
+    },
+  });
+
+  const activePointer =
+    labControlMode === "mouse" ? { ...mousePos, isDrawing: isMouseDown }
+    : labControlMode === "wand" ? pointer
+    : (isMouseDown ? { ...mousePos, isDrawing: true } : pointer);
+
+  const snapped = useMemo(() => {
+    if (!activePointer) return null;
+    return getMagneticSnap(activePointer, testStars);
+  }, [activePointer, testStars]);
+
   useEffect(() => {
-    fetchRegistrations();
-  }, []);
+    if (activeTab === "database") {
+      fetchRegistrations();
+    }
+  }, [activeTab]);
 
   async function fetchRegistrations() {
     setLoading(true);
@@ -102,12 +143,54 @@ export default function Dashboard({ onBack }) {
     }
   }
 
+  const handleLabCanvasMouseDown = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    setMousePos({ x: nx, y: ny });
+    setIsMouseDown(true);
+
+    const hit = testStars.find((s) => {
+      const dx = s.x - nx;
+      const dy = s.y - ny;
+      return Math.sqrt(dx * dx + dy * dy) < 0.1;
+    });
+    if (hit) setLabDrawingFrom(hit);
+  };
+
+  const handleLabCanvasMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    setMousePos({ x: nx, y: ny });
+  };
+
+  const handleLabCanvasMouseUp = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    setIsMouseDown(false);
+
+    if (labDrawingFrom) {
+      const hit = testStars.find((s) => {
+        const dx = s.x - nx;
+        const dy = s.y - ny;
+        return Math.sqrt(dx * dx + dy * dy) < 0.1 && s.id !== labDrawingFrom.id;
+      });
+      if (hit) {
+        setLabConnections((prev) => [...prev, { from: labDrawingFrom, to: hit }]);
+        playSfx("snap");
+      }
+    }
+    setLabDrawingFrom(null);
+  };
+
   const filtered = registrations.filter((r) => {
     const term = search.toLowerCase();
     return (
-      r.first_name.toLowerCase().includes(term) ||
-      r.last_name.toLowerCase().includes(term) ||
-      r.sr_code.toLowerCase().includes(term) ||
+      r.first_name?.toLowerCase().includes(term) ||
+      r.last_name?.toLowerCase().includes(term) ||
+      r.sr_code?.toLowerCase().includes(term) ||
       (r.course && r.course.toLowerCase().includes(term)) ||
       (r.section && r.section.toLowerCase().includes(term))
     );
@@ -127,27 +210,28 @@ export default function Dashboard({ onBack }) {
         padding: "0 0 40px",
         overflowX: "hidden",
         boxSizing: "border-box",
+        zIndex: 20,
       }}
     >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
         @keyframes twinkle { 0%,100%{opacity:0.25} 50%{opacity:1} }
         .action-btn { transition: all 0.2s ease; cursor: pointer; }
-        .action-btn:hover { transform: scale(1.1); }
+        .action-btn:hover { transform: scale(1.08); }
         .action-btn:active { transform: scale(0.95); }
         .table-row { transition: background-color 0.2s; }
-        .table-row:hover { background: rgba(255, 255, 255, 0.02) !important; }
+        .table-row:hover { background: rgba(255, 255, 255, 0.03) !important; }
       `}</style>
 
       <Starfield />
 
-      {/* Header */}
+      {/* Top Bar Header */}
       <div
         style={{
           position: "relative",
           zIndex: 2,
           width: "100%",
-          maxWidth: 960,
+          maxWidth: 1040,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -162,7 +246,7 @@ export default function Dashboard({ onBack }) {
             border: `1px solid ${colors.inputBorder}`,
             color: colors.textDim,
             borderRadius: 12,
-            padding: "6px 14px",
+            padding: "8px 16px",
             fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
@@ -170,251 +254,597 @@ export default function Dashboard({ onBack }) {
             letterSpacing: 0.5,
           }}
         >
-          ← FORM
+          ← TITLE SCREEN
         </button>
 
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: colors.textDim, letterSpacing: 2 }}>
-            DATABASE ADMIN
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: colors.text, letterSpacing: 1 }}>
-            PLAYER ENTRIES
-          </div>
-        </div>
-
-        <button
-          onClick={fetchRegistrations}
-          disabled={loading}
-          style={{
-            background: "rgba(15,23,42,0.8)",
-            border: `1px solid ${colors.inputBorder}`,
-            color: colors.cyan,
-            borderRadius: 12,
-            padding: "6px 12px",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          <RefreshCw size={13} className={loading ? "spin-icon" : ""} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          REFRESH
-        </button>
-      </div>
-
-      {/* Database Quick Stats */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          width: "100%",
-          maxWidth: 920,
-          display: "flex",
-          gap: 12,
-          padding: "0 18px",
-          boxSizing: "border-box",
-          marginBottom: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        {[
-          { label: "TOTAL REGISTERED", value: registrations.length, color: colors.gold },
-          { label: "CICS PLAYERS", value: registrations.filter(r => r.department === "CICS").length, color: colors.cyan },
-          { label: "COMPLETED SESSIONS (3/3)", value: registrations.filter(r => (r.attempts_used || 0) >= 3).length, color: colors.danger },
-        ].map((stat, i) => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              minWidth: 150,
-              background: colors.cardBg,
-              border: `1px solid ${colors.inputBorder}`,
-              borderRadius: 16,
-              padding: "12px 14px",
-              boxSizing: "border-box",
-            }}
-          >
-            <div style={{ fontSize: 9, fontWeight: 700, color: colors.textDim, letterSpacing: 0.5 }}>{stat.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: stat.color, marginTop: 4 }}>{stat.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Main Table Container */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          width: "100%",
-          maxWidth: 920,
-          padding: "0 18px",
-          boxSizing: "border-box",
-        }}
-      >
+        {/* Tab Switcher Pills */}
         <div
           style={{
-            background: colors.cardBg,
+            display: "flex",
+            background: "rgba(15,23,42,0.9)",
             border: `1px solid ${colors.inputBorder}`,
-            borderRadius: 24,
-            padding: "16px 18px",
-            boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+            borderRadius: 30,
+            padding: 4,
+            gap: 4,
           }}
         >
-          {/* Controls bar */}
-          <div
+          <button
+            onClick={() => setActiveTab("lab")}
             style={{
+              background: activeTab === "lab" ? colors.accent : "transparent",
+              color: activeTab === "lab" ? "#fff" : colors.textDim,
+              border: "none",
+              borderRadius: 20,
+              padding: "7px 16px",
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: "pointer",
               display: "flex",
-              justifyContent: "space-between",
               alignItems: "center",
-              gap: 12,
-              marginBottom: 16,
-              flexWrap: "wrap",
+              gap: 6,
+              transition: "all 0.2s",
             }}
           >
+            <Sliders size={14} /> MOTION & MOUSE LAB
+          </button>
+          <button
+            onClick={() => setActiveTab("database")}
+            style={{
+              background: activeTab === "database" ? colors.accent : "transparent",
+              color: activeTab === "database" ? "#fff" : colors.textDim,
+              border: "none",
+              borderRadius: 20,
+              padding: "7px 16px",
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.2s",
+            }}
+          >
+            <QrCode size={14} /> PLAYER DATABASE ({registrations.length})
+          </button>
+        </div>
+
+        {onLaunchChallenge ? (
+          <button
+            onClick={() => onLaunchChallenge(selectedConstellationIdx)}
+            style={{
+              background: "linear-gradient(135deg, #4ade80, #22d3ee)",
+              border: "none",
+              color: "#050916",
+              borderRadius: 12,
+              padding: "8px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: "pointer",
+              boxShadow: "0 0 16px rgba(74,222,128,0.4)",
+            }}
+          >
+            <Play size={13} fill="#050916" /> LAUNCH GAME
+          </button>
+        ) : (
+          <div style={{ width: 120 }} />
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* TAB 1: MOTION CAPTURE & MOUSE LAB                                         */}
+      {/* ========================================================================= */}
+      {activeTab === "lab" && (
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            width: "100%",
+            maxWidth: 1040,
+            padding: "0 18px",
+            boxSizing: "border-box",
+            display: "grid",
+            gridTemplateColumns: "1.1fr 0.9fr",
+            gap: 18,
+          }}
+        >
+          {/* LEFT: Live Testing Ground Canvas */}
+          <div
+            style={{
+              background: colors.cardBg,
+              border: `1px solid ${colors.inputBorder}`,
+              borderRadius: 20,
+              padding: 20,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: colors.cyan, letterSpacing: 1 }}>
+                  INTERACTIVE PLAYGROUND
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: colors.text }}>
+                  Star Snapping & Tracing Sandbox
+                </div>
+              </div>
+              <button
+                onClick={() => setLabConnections([])}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${colors.inputBorder}`,
+                  color: colors.textDim,
+                  borderRadius: 8,
+                  padding: "5px 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Clear Lines
+              </button>
+            </div>
+
+            {/* Live Interactive SVG Canvas */}
             <div
+              onMouseDown={handleLabCanvasMouseDown}
+              onMouseMove={handleLabCanvasMouseMove}
+              onMouseUp={handleLabCanvasMouseUp}
               style={{
                 position: "relative",
-                flex: 1,
-                minWidth: 260,
+                width: "100%",
+                height: 380,
+                background: "radial-gradient(circle at center, #0b1124 0%, #030712 100%)",
+                border: "1px solid rgba(99, 102, 241, 0.25)",
+                borderRadius: 16,
+                overflow: "hidden",
+                cursor: "crosshair",
               }}
             >
-              <Search
-                size={16}
-                color={colors.textDim}
-                style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}
-              />
-              <input
-                placeholder="Search SR-Code, Name, Course, Section..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: 40,
-                  background: colors.inputBg,
-                  border: `1px solid ${colors.inputBorder}`,
-                  borderRadius: 12,
-                  padding: "0 14px 0 38px",
-                  boxSizing: "border-box",
-                  color: colors.text,
-                  fontFamily: "inherit",
-                  fontSize: 13,
-                  outline: "none",
-                }}
-              />
+              <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
+                {/* Drawn Connections */}
+                {labConnections.map((c, i) => (
+                  <line
+                    key={i}
+                    x1={`${c.from.x * 100}%`}
+                    y1={`${c.from.y * 100}%`}
+                    x2={`${c.to.x * 100}%`}
+                    y2={`${c.to.y * 100}%`}
+                    stroke="#f4d58d"
+                    strokeWidth="3"
+                    filter="drop-shadow(0 0 6px rgba(244,213,141,0.8))"
+                  />
+                ))}
+
+                {/* Active Live Drag Line */}
+                {labDrawingFrom && (
+                  <line
+                    x1={`${labDrawingFrom.x * 100}%`}
+                    y1={`${labDrawingFrom.y * 100}%`}
+                    x2={`${mousePos.x * 100}%`}
+                    y2={`${mousePos.y * 100}%`}
+                    stroke="#38bdf8"
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                )}
+              </svg>
+
+              {/* Star Nodes */}
+              {testStars.map((star) => {
+                const isSnappedTarget = snapped?.node?.id === star.id;
+                return (
+                  <div
+                    key={star.id}
+                    style={{
+                      position: "absolute",
+                      left: `${star.x * 100}%`,
+                      top: `${star.y * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: isSnappedTarget ? 34 : 24,
+                        height: isSnappedTarget ? 34 : 24,
+                        borderRadius: "50%",
+                        background: isSnappedTarget ? "#f4d58d" : "#818cf8",
+                        boxShadow: isSnappedTarget
+                          ? "0 0 20px #f4d58d, 0 0 35px rgba(244,213,141,0.6)"
+                          : "0 0 12px rgba(129,140,248,0.5)",
+                        transition: "all 0.2s ease",
+                        border: "2px solid #fff",
+                      }}
+                    />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: colors.textDim, marginTop: 4 }}>
+                      {star.label}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Reticle Cursor for Active Pointer */}
+              {activePointer && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${activePointer.x * 100}%`,
+                    top: `${activePointer.y * 100}%`,
+                    transform: "translate(-50%, -50%)",
+                    width: 28,
+                    height: 28,
+                    border: `2px solid ${activePointer.isDrawing ? "#4ade80" : "#38bdf8"}`,
+                    borderRadius: "50%",
+                    pointerEvents: "none",
+                    boxShadow: `0 0 16px ${activePointer.isDrawing ? "#4ade80" : "#38bdf8"}`,
+                    transition: "border-color 0.15s",
+                  }}
+                >
+                  <div style={{ position: "absolute", inset: 8, background: activePointer.isDrawing ? "#4ade80" : "#38bdf8", borderRadius: "50%" }} />
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: colors.textDim }}>
-              Showing {filtered.length} entries
+
+            {/* Input Mode Selector */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(15,23,42,0.6)", padding: "10px 14px", borderRadius: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Active Test Mode:</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[
+                  { id: "mouse", label: "🖱️ Mouse / Touch" },
+                  { id: "wand", label: "🪄 Motion Capture" },
+                  { id: "hybrid", label: "⚡ Hybrid Both" },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setLabControlMode(m.id)}
+                    style={{
+                      background: labControlMode === m.id ? colors.accent : "rgba(255,255,255,0.06)",
+                      color: labControlMode === m.id ? "#fff" : colors.textDim,
+                      border: "none",
+                      borderRadius: 8,
+                      padding: "6px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Database Table */}
-          <div style={{ overflowX: "auto", width: "100%" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${colors.inputBorder}` }}>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700 }}>PLAYER</th>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700 }}>SR-CODE</th>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700 }}>DEPT / COURSE</th>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700 }}>YEAR / SECTION</th>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700, textAlign: "center" }}>ATTEMPTS</th>
-                  <th style={{ padding: "10px 12px", color: colors.textDim, fontWeight: 700, textAlign: "right" }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((player, idx) => {
-                  const attempts = player.attempts_used || 0;
-                  const isFinished = attempts >= 3;
-                  return (
-                    <tr
-                      key={player.id}
-                      className="table-row"
-                      style={{
-                        background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
-                        borderBottom: `1px solid rgba(255,255,255,0.03)`,
-                      }}
-                    >
+          {/* RIGHT: Live Webcam Feed & MediaPipe Telemetry */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Live Camera Feed Card */}
+            <div
+              style={{
+                background: colors.cardBg,
+                border: `1px solid ${colors.inputBorder}`,
+                borderRadius: 20,
+                padding: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Video size={16} color={colors.iconPurple} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: colors.text }}>LIVE WEBCAM STREAM</span>
+                </div>
+                <span
+                  style={{
+                    background: pointer ? "rgba(74, 222, 128, 0.15)" : "rgba(248, 113, 113, 0.15)",
+                    color: pointer ? "#4ade80" : "#f87171",
+                    border: `1px solid ${pointer ? "rgba(74, 222, 128, 0.3)" : "rgba(248, 113, 113, 0.3)"}`,
+                    borderRadius: 12,
+                    padding: "3px 8px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  {pointer ? "🟢 HAND DETECTED (60 FPS)" : "🔴 NO HAND IN FRAME"}
+                </span>
+              </div>
+
+              {/* Hardware Video Stream Element */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: 220,
+                  background: "#000",
+                  borderRadius: 14,
+                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  autoPlay
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    transform: "scaleX(-1)", // Mirror perspective
+                  }}
+                />
+                {!pointer && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+                    <div style={{ textAlign: "center", padding: 12 }}>
+                      <div style={{ fontSize: 24 }}>✋</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: colors.textDim, marginTop: 4 }}>
+                        Raise index finger / wand into camera frame
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Real-time Telemetry Stats Card */}
+            <div
+              style={{
+                background: colors.cardBg,
+                border: `1px solid ${colors.inputBorder}`,
+                borderRadius: 20,
+                padding: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Activity size={16} color={colors.cyan} />
+                <span style={{ fontSize: 13, fontWeight: 800, color: colors.text }}>MEDIAPIPE TELEMETRY</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "rgba(15,23,42,0.6)", padding: "8px 12px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: colors.textDim, fontWeight: 700 }}>GESTURE STATE</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: colors.gold, marginTop: 2 }}>{gestureStatus}</div>
+                </div>
+
+                <div style={{ background: "rgba(15,23,42,0.6)", padding: "8px 12px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: colors.textDim, fontWeight: 700 }}>1€ SMOOTHING FILTER</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: colors.success, marginTop: 2 }}>Active (MinCut: 1.2, Beta: 0.05)</div>
+                </div>
+
+                <div style={{ background: "rgba(15,23,42,0.6)", padding: "8px 12px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: colors.textDim, fontWeight: 700 }}>COORDINATES (X, Y)</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: colors.cyan, marginTop: 2 }}>
+                    {pointer ? `${(pointer.x * 100).toFixed(1)}%, ${(pointer.y * 100).toFixed(1)}%` : "—"}
+                  </div>
+                </div>
+
+                <div style={{ background: "rgba(15,23,42,0.6)", padding: "8px 12px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: colors.textDim, fontWeight: 700 }}>MAGNETIC TARGET</div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: colors.text, marginTop: 2 }}>
+                    {snapped?.node?.label || "None (In Flight)"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Constellation Stage Selector */}
+              {constellations.length > 0 && (
+                <div style={{ marginTop: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: colors.textDim, marginBottom: 6 }}>
+                    SELECT CONSTELLATION CHALLENGE STAGE:
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {constellations.map((c, idx) => (
+                      <button
+                        key={c.id || idx}
+                        onClick={() => setSelectedConstellationIdx(idx)}
+                        style={{
+                          background: selectedConstellationIdx === idx ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: selectedConstellationIdx === idx ? "#fff" : colors.textDim,
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "5px 10px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        #{idx + 1} {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 2: DATABASE ADMIN & PLAYER ENTRIES                                    */}
+      {/* ========================================================================= */}
+      {activeTab === "database" && (
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            width: "100%",
+            maxWidth: 1040,
+            padding: "0 18px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          {/* Database Quick Stats */}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {[
+              { label: "TOTAL REGISTERED", value: registrations.length, color: colors.gold },
+              { label: "CICS PLAYERS", value: registrations.filter((r) => r.department === "CICS").length, color: colors.cyan },
+              { label: "COMPLETED SESSIONS (3/3)", value: registrations.filter((r) => (r.attempts_used || 0) >= 3).length, color: colors.danger },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  minWidth: 150,
+                  background: colors.cardBg,
+                  border: `1px solid ${colors.inputBorder}`,
+                  borderRadius: 16,
+                  padding: "12px 14px",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={{ fontSize: 9, fontWeight: 700, color: colors.textDim, letterSpacing: 0.5 }}>{stat.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: stat.color, marginTop: 4 }}>{stat.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Main Table Container */}
+          <div
+            style={{
+              background: colors.cardBg,
+              border: `1px solid ${colors.inputBorder}`,
+              borderRadius: 20,
+              padding: 20,
+            }}
+          >
+            {/* Search Input Bar */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <Search size={16} color={colors.textDim} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search by name, SR-code, course, section..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: 42,
+                    background: colors.inputBg,
+                    border: `1px solid ${colors.inputBorder}`,
+                    borderRadius: 12,
+                    padding: "0 14px 0 40px",
+                    color: colors.text,
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                    outline: "none",
+                  }}
+                />
+              </div>
+              <button
+                onClick={fetchRegistrations}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: `1px solid ${colors.inputBorder}`,
+                  color: colors.text,
+                  borderRadius: 12,
+                  padding: "0 14px",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <RefreshCw size={13} className={loading ? "spin-icon" : ""} /> REFRESH
+              </button>
+            </div>
+
+            {/* Players Table */}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${colors.inputBorder}`, color: colors.textDim, fontSize: 11, fontWeight: 700 }}>
+                    <th style={{ padding: "10px 12px" }}>SR-CODE</th>
+                    <th style={{ padding: "10px 12px" }}>PLAYER NAME</th>
+                    <th style={{ padding: "10px 12px" }}>COURSE & SECTION</th>
+                    <th style={{ padding: "10px 12px" }}>ATTEMPTS</th>
+                    <th style={{ padding: "10px 12px" }}>BEST SCORE</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => (
+                    <tr key={r.id} className="table-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "12px", fontWeight: 700, color: colors.cyan }}>{r.sr_code}</td>
                       <td style={{ padding: "12px", fontWeight: 700, color: colors.text }}>
-                        {player.first_name} {player.last_name}
+                        {r.last_name}, {r.first_name} {r.middle_initial || ""}
                       </td>
-                      <td style={{ padding: "12px", fontFamily: "monospace", color: colors.cyan }}>
-                        {player.sr_code}
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <span style={{ fontSize: 10, background: "rgba(99,102,241,0.15)", color: colors.iconPurple, padding: "2px 6px", borderRadius: 4, marginRight: 6 }}>
-                          {player.department}
-                        </span>
-                        <span style={{ color: colors.textDim }}>{player.course}</span>
+                      <td style={{ padding: "12px", color: colors.textDim }}>
+                        {r.course} {r.year_level && `${r.year_level}-${r.section}`}
                       </td>
                       <td style={{ padding: "12px" }}>
-                        <span style={{ color: colors.textDim }}>{player.year_level}</span>
-                        {player.section && (
-                          <span style={{ color: colors.success, marginLeft: 6, fontWeight: 600 }}>
-                            {player.section}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: "12px", textAlign: "center" }}>
                         <span
                           style={{
-                            background: isFinished ? "rgba(248,113,113,0.15)" : "rgba(74,222,128,0.15)",
-                            color: isFinished ? colors.danger : colors.success,
+                            background: (r.attempts_used || 0) >= 3 ? "rgba(248,113,113,0.2)" : "rgba(74,222,128,0.2)",
+                            color: (r.attempts_used || 0) >= 3 ? colors.danger : colors.success,
                             padding: "3px 8px",
-                            borderRadius: 10,
-                            fontWeight: 800,
-                            fontSize: 10,
+                            borderRadius: 8,
+                            fontWeight: 700,
+                            fontSize: 11,
                           }}
                         >
-                          {attempts} / 3
+                          {r.attempts_used || 0} / 3
                         </span>
                       </td>
+                      <td style={{ padding: "12px", fontWeight: 800, color: colors.gold }}>{r.best_score || 0}</td>
                       <td style={{ padding: "12px", textAlign: "right" }}>
-                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
-                          {/* QR Code view */}
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                           <button
+                            onClick={() => setActiveTicket(r)}
+                            title="View QR Ticket"
                             className="action-btn"
-                            title="Show Ticket QR Code"
-                            onClick={() => setActiveTicket(player)}
-                            style={{ background: "none", border: "none", color: colors.gold, cursor: "pointer", padding: 0 }}
+                            style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: colors.iconPurple, borderRadius: 8, padding: 6 }}
                           >
-                            <QrCode size={16} />
+                            <QrCode size={14} />
                           </button>
-                          {/* Reset Attempts */}
                           <button
+                            onClick={() => handleReset(r.id)}
+                            title="Reset Attempts"
                             className="action-btn"
-                            title="Reset Game Attempts to 0"
-                            onClick={() => handleReset(player.id)}
-                            style={{ background: "none", border: "none", color: colors.cyan, cursor: "pointer", padding: 0 }}
+                            style={{ background: "rgba(244,213,141,0.15)", border: "1px solid rgba(244,213,141,0.3)", color: colors.gold, borderRadius: 8, padding: 6 }}
                           >
-                            <RotateCcw size={16} />
+                            <RotateCcw size={14} />
                           </button>
-                          {/* Delete Entry */}
                           <button
+                            onClick={() => handleDelete(r.id)}
+                            title="Delete Record"
                             className="action-btn"
-                            title="Delete Player Entry"
-                            onClick={() => handleDelete(player.id)}
-                            style={{ background: "none", border: "none", color: colors.danger, cursor: "pointer", padding: 0 }}
+                            style={{ background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.3)", color: colors.danger, borderRadius: 8, padding: 6 }}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
-                {filtered.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan="6" style={{ padding: "40px 12px", textAlign: "center", color: colors.textDim }}>
-                      No registered players found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ))}
+                  {filtered.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan="6" style={{ padding: "40px 12px", textAlign: "center", color: colors.textDim }}>
+                        No registered players found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Ticket Details Popup Overlay */}
       {activeTicket && (
@@ -473,12 +903,6 @@ export default function Dashboard({ onBack }) {
                 />
               </div>
             </div>
-
-            {activeTicket.ticket_token && (
-              <div style={{ fontFamily: "monospace", fontSize: 9, color: colors.textDim, marginBottom: 14 }}>
-                TOKEN: {activeTicket.ticket_token}
-              </div>
-            )}
 
             <button
               onClick={() => setActiveTicket(null)}
