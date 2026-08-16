@@ -207,7 +207,7 @@ export default function Dashboard({
     <div
       style={{
         position: "relative",
-        minHeight: "100dvh",
+        height: "100dvh",
         width: "100%",
         background: colors.bg,
         fontFamily: "'Outfit', system-ui, sans-serif",
@@ -216,6 +216,7 @@ export default function Dashboard({
         alignItems: "center",
         padding: "0 0 40px",
         overflowX: "hidden",
+        overflowY: "auto",
         boxSizing: "border-box",
         zIndex: 20,
       }}
