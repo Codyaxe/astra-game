@@ -91,7 +91,7 @@ CONSTELLATIONS = [
     {
         "name": "Taurus",
         "head_node_id": 0,
-        "time_limit_sec": 40,
+        "time_limit_sec": 60,
         "star_nodes": [
             {"id": 0, "label": "Aldebaran", "x": 0.52, "y": 0.48, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Elnath",    "x": 0.38, "y": 0.28, "next_node_id": 2, "hitbox_radius": 0.055},
@@ -131,7 +131,7 @@ CONSTELLATIONS = [
     {
         "name": "Leo",
         "head_node_id": 0,
-        "time_limit_sec": 40,
+        "time_limit_sec": 60,
         "star_nodes": [
             {"id": 0, "label": "Regulus",   "x": 0.25, "y": 0.52, "next_node_id": 1, "hitbox_radius": 0.055},
             {"id": 1, "label": "Algieba",   "x": 0.40, "y": 0.38, "next_node_id": 2, "hitbox_radius": 0.055},
