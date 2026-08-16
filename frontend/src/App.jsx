@@ -55,7 +55,7 @@ export default function App() {
 
   // Preload audio & fetch real constellations from backend
   useEffect(() => {
-    preloadAll(ASSETS.audio);
+    preloadAll(ASSETS.sfx);
 
     getConstellations()
       .then((data) => {
@@ -250,18 +250,25 @@ export default function App() {
 
       {(screen === 'challenge_win_score' || screen === 'challenge_fail') && (
         <ScoreOverlay
-          score={lastAttemptResult?.score || lastAttemptResult?.attempt_score || 95}
+          score={lastAttemptResult?.score || lastAttemptResult?.attempt_score || (screen === 'challenge_win_score' ? 95 : 0)}
           isWin={screen === 'challenge_win_score'}
+          player={player}
+          remainingAttempts={Math.max(0, 3 - attemptNumber)}
           isExiting={isScoreExiting}
+          onTryAgain={attemptNumber < 3 ? handleRetryNextAttempt : null}
           onContinue={() => {
-            if (constellationIndex + 1 < constellations.length) {
+            if (screen === 'challenge_fail') {
+              // Disqualified / Failed -> Direct to Leaderboard!
+              setScreen('leaderboard');
+            } else if (constellationIndex + 1 < constellations.length) {
+              // Solved stage -> Proceed to next constellation!
               setConstellationIndex((idx) => idx + 1);
               setScreen('challenge');
             } else {
+              // Completed all constellations -> Leaderboard!
               setScreen('leaderboard');
             }
           }}
-          onReturnToTitle={handleReturnToTitle}
         />
       )}
 

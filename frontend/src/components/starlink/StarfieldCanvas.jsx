@@ -99,11 +99,15 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
       isFrozenRef.current = false;
     }
 
-    // Reset impact cracks, embers, and timing when leaving impact state
-    if (state !== 'impact') {
+    // Reset impact cracks, embers, timing, and frozen status when leaving impact/frozen state
+    if (state !== 'impact' && state !== 'frozen') {
+      isFrozenRef.current = false;
       impactTimeRef.current = null;
       crackLinesRef.current = [];
       embersRef.current = [];
+      if (!animFrameRef.current) {
+        animFrameRef.current = requestAnimationFrame(render);
+      }
     }
 
     if (state === 'impact' && !impactTimeRef.current) {
