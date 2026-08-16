@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getConstellations, registerPlayer, submitAttempt } from './services/api';
+import { getConstellations, registerPlayer, submitAttempt, getLeaderboard } from './services/api';
 import { preloadAll } from './utils/audio';
 import { ASSETS } from './data/assets';
 import { DEFAULT_CONSTELLATIONS } from './data/defaultConstellations';
@@ -143,11 +143,18 @@ export default function App() {
 
   const [isStageWarping, setIsStageWarping] = useState(false);
   const [sessionStageScores, setSessionStageScores] = useState([]);
+  const [sessionTelemetry, setSessionTelemetry] = useState({
+    total_time_sec: 0,
+    total_travel_dist_cm: 0,
+    total_wrong_attempts: 0,
+    stage_count: 0,
+  });
+  const [livePlayerRank, setLivePlayerRank] = useState(null);
 
   const activePlaylist = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
   const currentConstellation = activePlaylist[constellationIndex] || activePlaylist[0];
 
-  const handleChallengeComplete = useCallback((result) => {
+  const handleChallengeComplete = useCallback(async (result) => {
     setIsStageWarping(false);
     const stageScore = typeof result?.score === 'number' ? result.score : 100.0;
     const updatedScores = [...sessionStageScores, stageScore];
@@ -155,11 +162,30 @@ export default function App() {
 
     // Compute fair normalized average percentage across all completed stages
     const averageScore = Math.round((updatedScores.reduce((a, b) => a + b, 0) / updatedScores.length) * 10) / 10;
+
+    // Accumulate multi-stage telemetry (total travel distance, total time, total mistakes)
+    const stageTelemetry = result?.telemetry || {};
+    const stageTime = Number(stageTelemetry.time_spent_sec) || 0;
+    const stageDist = Number(stageTelemetry.travel_dist_cm) || 0;
+    const stageWrong = Number(stageTelemetry.wrong_attempts) || 0;
+
+    const updatedTelemetry = {
+      total_time_sec: Math.round(((sessionTelemetry.total_time_sec || 0) + stageTime) * 10) / 10,
+      total_travel_dist_cm: Math.round(((sessionTelemetry.total_travel_dist_cm || 0) + stageDist) * 10) / 10,
+      total_wrong_attempts: (sessionTelemetry.total_wrong_attempts || 0) + stageWrong,
+      time_spent_sec: Math.round(((sessionTelemetry.total_time_sec || 0) + stageTime) * 10) / 10,
+      travel_dist_cm: Math.round(((sessionTelemetry.total_travel_dist_cm || 0) + stageDist) * 10) / 10,
+      wrong_attempts: (sessionTelemetry.total_wrong_attempts || 0) + stageWrong,
+      stage_count: (sessionTelemetry.stage_count || 0) + 1,
+    };
+    setSessionTelemetry(updatedTelemetry);
+
     const finalResult = {
       ...(result || {}),
       stage_score: stageScore,
       score: averageScore,
       total_stages_cleared: updatedScores.length,
+      telemetry: updatedTelemetry,
     };
 
     setLastAttemptResult(finalResult);
@@ -173,27 +199,79 @@ export default function App() {
 
     // Check if more constellations remain in the active session playlist
     const currentList = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
+    console.log('%c[ASTRA DIAGNOSTIC] ⏱️ Stage Telemetry Accumulated:', 'color: #38bdf8; font-weight: bold;', {
+      stage: `${constellationIndex + 1} / ${currentList.length}`,
+      stageConstellation: currentList[constellationIndex]?.name,
+      stageScore: `${stageScore} PTS`,
+      runningSessionAverage: `${averageScore} PTS`,
+      stageTime: `${stageTime} s`,
+      cumulativeSessionTime: `${updatedTelemetry.total_time_sec} s`,
+      stageDistance: `${stageDist} cm`,
+      cumulativeSessionDistance: `${updatedTelemetry.total_travel_dist_cm} cm`,
+    });
+
     if (constellationIndex + 1 < currentList.length) {
-      console.log('%c[ASTRA] 🚀 Stage Solved -> Warping to next randomized constellation:', 'color: #4ade80; font-weight: bold;', {
-        stageScore: `${stageScore} PTS`,
-        runningSessionAverage: `${averageScore} PTS`,
-        nextStage: currentList[constellationIndex + 1]?.name,
-      });
+      console.log('%c[ASTRA] 🚀 Warping to next stage:', 'color: #4ade80; font-weight: bold;', currentList[constellationIndex + 1]?.name);
       setConstellationIndex((idx) => idx + 1);
       setScreen('loading'); // 👈 Shows the Hyperspace Warp Loading screen between levels!
     } else {
-      // Completed all session constellations -> Sync final normalized average to backend & show score
-      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Final Normalized Session Score:', 'color: #facc15; font-weight: bold;', `${averageScore} PTS`, updatedScores);
-      if (player?.id) {
-        submitAttempt({
-          player_id: player.id,
-          score: averageScore,
-          completed_status: 1,
-        }).catch((e) => console.warn('[ASTRA] Final score sync warning:', e));
+      // Completed all session constellations -> Sync final normalized average to backend & determine real rank
+      console.log('%c[ASTRA DIAGNOSTIC] 🏆 All Session Constellations Cleared! Submitting final average score...', 'color: #facc15; font-weight: bold;', {
+        player: player?.sr_code || player?.first_name || 'Pilot',
+        finalAverageScore: `${averageScore} PTS`,
+        allStageScores: updatedScores,
+        totalCumulativeTime: `${updatedTelemetry.total_time_sec} s`,
+        totalCumulativeDistance: `${updatedTelemetry.total_travel_dist_cm} cm`,
+      });
+
+      let computedRank = null;
+      if (player?.id || player?.sr_code) {
+        try {
+          const submitRes = await submitAttempt({
+            player_id: player?.id,
+            sr_code: player?.sr_code,
+            score: averageScore,
+            time_elapsed_ms: Math.round(updatedTelemetry.total_time_sec * 1000),
+            wand_travel_dist: Math.round(updatedTelemetry.total_travel_dist_cm * 10),
+            completed_status: 1,
+          });
+          console.log('%c[ASTRA DIAGNOSTIC] 💾 Score Submitted to Backend Successfully:', 'color: #4ade80;', submitRes);
+        } catch (e) {
+          console.warn('[ASTRA DIAGNOSTIC] ⚠️ Final score sync warning:', e);
+        }
+
+        try {
+          const lbRes = await getLeaderboard(50);
+          const lb = lbRes?.leaderboard || [];
+          const matchIdx = lb.findIndex(
+            (r) =>
+              (r.player_id && player?.id && String(r.player_id) === String(player.id)) ||
+              (r.id && player?.id && String(r.id) === String(player.id)) ||
+              (r.sr_code && player?.sr_code && r.sr_code.toLowerCase() === player.sr_code.toLowerCase())
+          );
+          if (matchIdx !== -1) {
+            computedRank = matchIdx + 1;
+          } else if (lb.length > 0) {
+            const derivedRank = lb.findIndex((r) => (r.highest_score || r.best_score || 0) <= averageScore);
+            computedRank = derivedRank !== -1 ? derivedRank + 1 : lb.length + 1;
+          } else {
+            computedRank = 1;
+          }
+          console.log('%c[ASTRA DIAGNOSTIC] 🎖️ Live Leaderboard Placement Calculated:', 'color: #f59e0b; font-weight: bold;', {
+            assignedRank: `#${computedRank}`,
+            matchedInLeaderboard: matchIdx !== -1,
+            totalLeaderboardParticipants: lb.length,
+            playerSRCode: player?.sr_code,
+            playerScore: averageScore,
+          });
+          setLivePlayerRank(computedRank);
+        } catch (err) {
+          console.error('[ASTRA DIAGNOSTIC] ⚠️ Error fetching live rank for score overlay:', err);
+        }
       }
       setScreen('challenge_win_score');
     }
-  }, [constellationIndex, sessionStageScores, sessionPlaylist, constellations, player?.id]);
+  }, [constellationIndex, sessionStageScores, sessionPlaylist, constellations, player, sessionTelemetry]);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
     setLastAttemptResult(result || { isWin: false, score: 0 });
@@ -203,6 +281,13 @@ export default function App() {
   const handleRetryNextAttempt = useCallback(() => {
     setIsScoreExiting(false);
     setSessionStageScores([]);
+    setSessionTelemetry({
+      total_time_sec: 0,
+      total_travel_dist_cm: 0,
+      total_wrong_attempts: 0,
+      stage_count: 0,
+    });
+    setLivePlayerRank(null);
     setAttemptNumber((prev) => prev + 1);
     generateSessionPlaylist();
     setConstellationIndex(0);
@@ -213,6 +298,14 @@ export default function App() {
     setIsScoreExiting(false);
     setPlayer(null);
     setLastAttemptResult(null);
+    setSessionStageScores([]);
+    setSessionTelemetry({
+      total_time_sec: 0,
+      total_travel_dist_cm: 0,
+      total_wrong_attempts: 0,
+      stage_count: 0,
+    });
+    setLivePlayerRank(null);
     setConstellationIndex(0);
     setScreen('title');
   }, []);
@@ -373,13 +466,16 @@ export default function App() {
 
       {(screen === 'challenge_win_score' || screen === 'challenge_fail') && (
         <ScoreOverlay
-          score={lastAttemptResult?.score || lastAttemptResult?.attempt_score || (screen === 'challenge_win_score' ? 95 : 0)}
+          score={typeof lastAttemptResult?.score === 'number' ? lastAttemptResult.score : (typeof lastAttemptResult?.attempt_score === 'number' ? lastAttemptResult.attempt_score : 0)}
           isWin={screen === 'challenge_win_score'}
           player={player}
-          remainingAttempts={Math.max(0, 3 - attemptNumber)}
+          telemetry={sessionTelemetry}
+          rankPlacement={livePlayerRank}
+          remainingAttempts={lastAttemptResult?.attempts_remaining ?? Math.max(0, 3 - attemptNumber)}
           continueLabel={screen === 'challenge_fail' ? 'VIEW LEADERBOARD 🏆' : (constellationIndex + 1 < activePlaylist.length ? 'NEXT CONSTELLATION ⮞' : 'VIEW LEADERBOARD 🏆')}
           isExiting={isScoreExiting}
-          onTryAgain={attemptNumber < 3 ? handleRetryNextAttempt : null}
+          onExitComplete={() => setIsScoreExiting(false)}
+          onTryAgain={(lastAttemptResult?.attempts_remaining ?? (3 - attemptNumber)) > 0 ? handleRetryNextAttempt : null}
           onContinue={() => {
             console.log('%c[ASTRA DIAGNOSTIC] 🚀 App.jsx onContinue triggered!', 'color: #4ade80; font-weight: bold;', {
               currentScreen: screen,

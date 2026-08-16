@@ -114,12 +114,14 @@ def validate_step():
     }), 200
 
 
-@game_bp.route("/submit", methods=["POST"])
-def submit_game():
+@game_bp.route("/submit", methods=["POST", "OPTIONS"])
+def submit_attempt():
     """
     Submit completed attempt telemetry.
     Request body: {
         "session_id": int,
+        "player_id": int,
+        "score": float,
         "time_elapsed_ms": int,
         "wrong_connections": int,
         "total_clicks": int,
@@ -128,13 +130,42 @@ def submit_game():
         "time_limit_sec": int
     }
     """
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+
     data = request.get_json(silent=True) or {}
 
     session_id = data.get("session_id")
-    if not session_id:
-        player_id = data.get("player_id") or data.get("user_id")
-        if not player_id:
-            return jsonify({"error": "session_id is required"}), 400
+    player_id = data.get("player_id") or data.get("user_id")
+
+    if not session_id and not player_id and data.get("sr_code"):
+        from models.player import get_player_by_sr_code
+        p = get_player_by_sr_code(data["sr_code"])
+        if p:
+            player_id = p["id"]
+
+    # If guest player (9999 or GUEST-01), resolve to real DB guest record
+    if player_id == 9999 or str(player_id) == "9999" or data.get("sr_code") == "GUEST-01":
+        from models.player import get_player_by_sr_code, create_player
+        guest = get_player_by_sr_code("GUEST-01")
+        if not guest:
+            try:
+                pid, _ = create_player(
+                    first_name="Guest",
+                    last_name="Explorer",
+                    sr_code="GUEST-01",
+                    course="BSCS",
+                    department="CICS",
+                    registration_source="guest"
+                )
+                player_id = pid
+            except Exception:
+                player_id = 1
+        else:
+            player_id = guest["id"]
+
+    if not session_id and not player_id:
+        return jsonify({"error": "session_id or player_id is required"}), 400
 
     time_elapsed_ms = data.get("time_elapsed_ms") or data.get("total_time") or 0
     wrong_connections = data.get("wrong_connections") or data.get("mistakes") or 0
@@ -146,17 +177,24 @@ def submit_game():
     completed_connections = int(data.get("completed_connections", 0))
     total_connections = int(data.get("total_connections", 0))
 
-    # Calculate score using completion ratio
-    score = compute_score(
-        wrong_connections=wrong_connections,
-        total_clicks=total_clicks,
-        time_elapsed_ms=time_elapsed_ms,
-        wand_travel_dist=wand_travel_dist,
-        time_limit_sec=time_limit_sec,
-        accuracy=accuracy,
-        completed_connections=completed_connections,
-        total_connections=total_connections,
-    )
+    # If explicit score provided, use it directly, otherwise compute from telemetry
+    explicit_score = data.get("score")
+    if explicit_score is not None:
+        try:
+            score = float(explicit_score)
+        except (ValueError, TypeError):
+            score = 0.0
+    else:
+        score = compute_score(
+            wrong_connections=wrong_connections,
+            total_clicks=total_clicks,
+            time_elapsed_ms=time_elapsed_ms,
+            wand_travel_dist=wand_travel_dist,
+            time_limit_sec=time_limit_sec,
+            accuracy=accuracy,
+            completed_connections=completed_connections,
+            total_connections=total_connections,
+        )
 
     if session_id:
         update_session(

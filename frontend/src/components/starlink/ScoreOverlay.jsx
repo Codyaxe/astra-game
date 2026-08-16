@@ -9,12 +9,12 @@ import React from 'react';
 import HoloDeactivate from '../HoloDeactivate';
 
 export default function ScoreOverlay({
-  score = 85,
+  score = 0,
   isWin = true,
   player = null,
   telemetry = null,
-  rankPlacement = 1,
-  remainingAttempts = 2,
+  rankPlacement = null,
+  remainingAttempts = 0,
   continueLabel = null,
   onTryAgain = null,
   onContinue = null,
@@ -23,15 +23,41 @@ export default function ScoreOverlay({
   onExitComplete = null,
 }) {
   // Format Player Name: "DELA CRUZ, JUAN K." or fallback
-  const rawFirstName = player?.first_name || 'JUAN';
-  const rawLastName = player?.last_name || 'DELA CRUZ';
-  const playerName = `${rawLastName.toUpperCase()}, ${rawFirstName.toUpperCase()} K.`;
-  const courseText = player?.course ? `CICS - ${player.course}` : 'CICS - Computer Science';
+  const rawFirstName = player?.first_name || '';
+  const rawLastName = player?.last_name || '';
+  const mi = player?.middle_initial || player?.mi ? ` ${player.middle_initial || player.mi}.` : '';
+  const playerName = rawLastName || rawFirstName
+    ? `${rawLastName.toUpperCase()}, ${rawFirstName.toUpperCase()}${mi}`
+    : 'PILOT CADET';
+  const courseText = player?.department && player?.course
+    ? `${player.department} - ${player.course}`
+    : (player?.department || player?.course || 'CICS - Computer Science');
 
-  // Telemetry Defaults: Time (25.2s), Errors (8), Distance (30.2cm)
-  const timeSpentSec = telemetry?.time_spent_sec !== undefined ? telemetry.time_spent_sec : 25.2;
-  const wrongAttempts = telemetry?.wrong_attempts !== undefined ? telemetry.wrong_attempts : 8;
-  const travelDistCm = telemetry?.travel_dist_cm !== undefined ? telemetry.travel_dist_cm : 30.2;
+  // Cumulative Telemetry: Time, Errors/Status, Distance
+  const timeSpentSec = telemetry?.total_time_sec !== undefined
+    ? telemetry.total_time_sec
+    : (telemetry?.time_spent_sec !== undefined ? telemetry.time_spent_sec : 0);
+  const wrongAttempts = telemetry?.total_wrong_attempts !== undefined
+    ? telemetry.total_wrong_attempts
+    : (telemetry?.wrong_attempts !== undefined ? telemetry.wrong_attempts : 0);
+  const travelDistCm = telemetry?.total_travel_dist_cm !== undefined
+    ? telemetry.total_travel_dist_cm
+    : (telemetry?.travel_dist_cm !== undefined ? telemetry.travel_dist_cm : 0);
+
+  // Diagnostic logging on mount / update
+  React.useEffect(() => {
+    console.log('%c[ASTRA DIAGNOSTIC] 📊 ScoreOverlay Telemetry & Rank Display:', 'color: #38bdf8; font-weight: bold;', {
+      playerName,
+      isWin,
+      score: `${score} PTS`,
+      totalTime: `${timeSpentSec}s`,
+      totalDistance: `${travelDistCm}cm`,
+      status: isWin ? '100%' : 'PARTIAL',
+      rankPlacement: rankPlacement ? `RANK #${rankPlacement}` : 'None / Not Ranked Yet',
+      remainingAttempts,
+      rawTelemetry: telemetry,
+    });
+  }, [playerName, isWin, score, timeSpentSec, travelDistCm, rankPlacement, remainingAttempts, telemetry]);
 
   // Primary Theme Color: Elegant Soft Celestial Gold for Win (#E2C98A), Softer Coral Rose for Fail (#F87171)
   const themeColor = isWin ? '#E2C98A' : '#F87171';
@@ -249,13 +275,19 @@ export default function ScoreOverlay({
           </div>
           <div style={{ fontSize: '1.05rem', color: '#E2E8F0', fontWeight: 600 }}>
             {isWin ? (
-              <>
-                congratulations, you are now{' '}
-                <span style={{ color: themeColor, fontWeight: 900, textShadow: `0 0 10px ${themeColor}` }}>
-                  {rankPlacement ? `TOP ${rankPlacement}` : 'TOP'}
-                </span>{' '}
-                in the GAME
-              </>
+              rankPlacement ? (
+                <>
+                  CONGRATULATIONS, YOU ARE NOW{' '}
+                  <span style={{ color: themeColor, fontWeight: 900, textShadow: `0 0 10px ${themeColor}` }}>
+                    RANK #{rankPlacement}
+                  </span>{' '}
+                  IN THE ASTRA FLEET
+                </>
+              ) : (
+                <span style={{ color: themeColor, fontWeight: 800, textShadow: `0 0 10px ${themeColor}`, letterSpacing: '1px' }}>
+                  CONGRATULATIONS, ALL CONSTELLATIONS ALIGNED!
+                </span>
+              )
             ) : (
               <span style={{ color: '#FF3B30', textShadow: '0 0 10px #FF3B30' }}>
                 Navigation disrupted. Spacecraft impact recorded.

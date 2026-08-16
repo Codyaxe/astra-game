@@ -3,7 +3,7 @@ Constellation-Tracing Game — Flask application entry point.
 """
 
 import os
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 
 from config import config_by_name
@@ -24,7 +24,23 @@ def create_app(config_name: str | None = None) -> Flask:
     app.config.from_object(config_by_name[config_name])
 
     # CORS — allow Vite dev server and local network devices to call the API
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = app.make_default_options_response()
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            return response
+
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        return response
 
     # Register blueprints
     app.register_blueprint(auth_bp) # /api/auth

@@ -295,7 +295,7 @@ export default function ChallengeScreen({
             telemetry: {
               time_spent_sec: elapsedSec,
               wrong_attempts: wrongConnections,
-              travel_dist_cm: travelCm > 0 ? travelCm : 28.5,
+              travel_dist_cm: travelCm,
             },
           };
 
@@ -681,19 +681,22 @@ export default function ChallengeScreen({
     return [originPos, { x: pointer.x, y: pointer.y }];
   }, [pointer, activeNode, gestureStyle, winFlybyProgress, controlMode]);
 
-  // Accumulate wand distance
+  // Accumulate wand distance (supports both MediaPipe pointer and mouse)
   useEffect(() => {
-    if (pointer && prevPointerRef.current) {
+    const currentPtr = pointer || (mouseWand?.isDrawing ? mouseWand : null);
+    if (currentPtr && prevPointerRef.current) {
       const d = calculateDistance(
         prevPointerRef.current.x,
         prevPointerRef.current.y,
-        pointer.x,
-        pointer.y
+        currentPtr.x,
+        currentPtr.y
       );
-      wandTravelDistRef.current += d * 1000;
+      if (!isNaN(d) && d > 0.001) {
+        wandTravelDistRef.current += d * 1000;
+      }
     }
-    prevPointerRef.current = pointer;
-  }, [pointer]);
+    prevPointerRef.current = currentPtr;
+  }, [pointer, mouseWand]);
 
   // Briefing State: Voiceover & ghost tracing animation only play on Tutorial Stage (Aries / stage 0)
   const isTutorialStage = constellationIndex === 0 || constellationData?.name?.toLowerCase().includes('aries');
