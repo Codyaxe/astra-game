@@ -27,6 +27,7 @@ import { PLACEHOLDER_STARS } from '../mock/placeholders';
 import SubtitleOverlay from '../components/dialogue/SubtitleOverlay';
 import useDialogueController from '../hooks/useDialogueController';
 import { DIALOGUE_CONFIG } from '../config/dialogueConfig';
+import TutorialBriefingModal from '../components/TutorialBriefingModal';
 
 export default function ChallengeScreen({
   player,
@@ -657,7 +658,18 @@ export default function ChallengeScreen({
     prevPointerRef.current = pointer;
   }, [pointer]);
 
-  // Start Session on mount / attempt reset (Active 30s countdown timer enabled)
+  // Briefing State: Voiceover plays during constellation entrance; timer starts after briefing or on skip
+  const [isBriefingActive, setIsBriefingActive] = useState(true);
+
+  const handleSkipBriefing = useCallback(() => {
+    setIsBriefingActive(false);
+    stopDialogue();
+    startTimeRef.current = Date.now();
+    startTimer();
+    console.log('%c[ASTRA DIAGNOSTIC] ⏩ Skipped Briefing -> Gameplay Timer Started!', 'color: #4ade80; font-weight: bold;');
+  }, [startTimer, stopDialogue]);
+
+  // Start Session on mount / attempt reset
   useEffect(() => {
     setWinFlybyProgress(null);
     setCompletedConnections([]);
@@ -665,8 +677,16 @@ export default function ChallengeScreen({
     setTotalClicks(0);
     setRecalibrationCount(0);
     wandTravelDistRef.current = 0;
-    startTimeRef.current = Date.now();
-    startTimer();
+    setIsBriefingActive(true);
+
+    console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Starting Entrance Briefing Voiceover...', 'color: #38bdf8; font-weight: bold;');
+    // Play Ship AI Phase A & B Voiceovers during entrance briefing
+    playSequence([...DIALOGUE_CONFIG.phaseA, ...DIALOGUE_CONFIG.phaseB], () => {
+      console.log('%c[ASTRA DIAGNOSTIC] 🎙️ Entrance Voiceover completed -> Starting Timer', 'color: #70a1ff;');
+      setIsBriefingActive(false);
+      startTimeRef.current = Date.now();
+      startTimer();
+    });
 
     if (player?.id && constellationData?.id) {
       startSession(player.id, constellationData.id)
@@ -678,8 +698,11 @@ export default function ChallengeScreen({
       setDimensions({ w: window.innerWidth, h: window.innerHeight });
     }
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [player, constellationData, attemptNumber, startTimer]);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      stopDialogue();
+    };
+  }, [constellationData?.id, attemptNumber]);
 
   // Calculate presentation scale and opacity (Entrance Arrival Easing + Win Fly-by Turn)
   let layerScale = 1.0;
@@ -791,13 +814,55 @@ export default function ChallengeScreen({
       {/* Upper Cockpit HUD: Constellation Badge (Left) + Timer (Right) */}
       {winFlybyProgress === null && (
         <HUD
-          timeLeft={timeLeft}
+          timeLeft={isBriefingActive ? timeLimit : timeLeft}
           constellationName={constellationData?.name || constellationList?.name || 'Orion (Demo)'}
         />
       )}
 
       {/* Gameplay Subtitle Overlay */}
       <SubtitleOverlay subtitle={activeSubtitle} />
+
+      {/* Bottom-Right Skip Briefing Action Button (Clean, Non-Obtrusive, Cinematic) */}
+      {isBriefingActive && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 28,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            animation: 'fadeIn 0.4s ease-out',
+          }}
+        >
+          <button
+            onClick={handleSkipBriefing}
+            style={{
+              background: 'linear-gradient(135deg, rgba(244, 213, 141, 0.9) 0%, rgba(224, 169, 59, 0.9) 100%)',
+              color: '#0a0e1a',
+              border: '1px solid rgba(244, 213, 141, 0.8)',
+              borderRadius: 14,
+              padding: '10px 22px',
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: '1px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6), 0 0 20px rgba(244, 213, 141, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.2s ease',
+              fontFamily: "'Outfit', sans-serif",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            <span>SKIP BRIEFING</span>
+            <span style={{ fontSize: 16 }}>⏩</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

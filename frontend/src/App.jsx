@@ -50,9 +50,6 @@ export default function App() {
   const [constellationIndex, setConstellationIndex] = useState(0);
   const [isScoreExiting, setIsScoreExiting] = useState(false);
 
-  // Dialogue Controller for in-game voiceovers & subtitles
-  const dialogue = useDialogueController(DIALOGUE_CONFIG);
-
   // Preload audio & fetch real constellations from backend
   useEffect(() => {
     preloadAll(ASSETS.sfx);
@@ -221,9 +218,6 @@ export default function App() {
       {(screen === 'challenge' || screen === 'challenge_win_score' || screen === 'challenge_fail') && (
         <ShipCockpitViewport />
       )}
-
-      {/* Subtitle Dialogue Overlay */}
-      <SubtitleOverlay subtitle={dialogue.activeSubtitle} />
 
       {/* Screen Render Switch */}
       {screen === 'title' && (
