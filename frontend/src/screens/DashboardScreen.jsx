@@ -1029,9 +1029,9 @@ export default function Dashboard({
             </div>
 
             {/* Players Table */}
-            <div style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)", overflowY: "auto" }}>
+            <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
-                <thead style={{ position: "sticky", top: 0, background: colors.cardBg, zIndex: 2 }}>
+                <thead>
                   <tr style={{ borderBottom: `1px solid ${colors.inputBorder}`, color: colors.textDim, fontSize: 11, fontWeight: 700 }}>
                     <th style={{ padding: "10px 12px" }}>SR-CODE</th>
                     <th style={{ padding: "10px 12px" }}>PLAYER NAME</th>

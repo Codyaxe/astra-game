@@ -81,16 +81,14 @@ export default function ScoreOverlay({
       <HoloDeactivate
         isExiting={isExiting}
         onExitComplete={onExitComplete}
-        style={{ width: 'min(440px, 92vw)', maxHeight: '96vh' }}
+        style={{ width: 'min(440px, 90vw)' }}
       >
         <div
           className="score-box holo-scanlines"
           style={{
             position: 'relative',
             width: '100%',
-            maxHeight: '94vh',
-            overflowY: 'auto',
-            padding: 'clamp(20px, 3vh, 36px) clamp(18px, 3.5vw, 32px)',
+            padding: '36px 32px 32px 32px',
             background: 'rgba(5, 9, 22, 0.22)',
             border: `2px solid ${themeColor}`,
             borderRadius: '28px',
@@ -100,6 +98,7 @@ export default function ScoreOverlay({
             color: '#FFF8E7',
             fontFamily: "'Outfit', 'Sora', sans-serif",
             backdropFilter: 'blur(8px)',
+            overflow: 'hidden',
           }}
         >
         {/* Hologram Corner Tech Ticks */}
@@ -114,7 +113,7 @@ export default function ScoreOverlay({
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            marginBottom: 'clamp(12px, 2vh, 24px)',
+            marginBottom: '24px',
           }}
         >
           <div
@@ -124,7 +123,7 @@ export default function ScoreOverlay({
               border: `1.5px solid ${themeColor}`,
               background: 'rgba(5, 9, 22, 0.4)',
               color: themeColor,
-              fontSize: 'clamp(0.75rem, 1.5vw, 0.85rem)',
+              fontSize: '0.85rem',
               fontWeight: 800,
               letterSpacing: '2px',
               textTransform: 'uppercase',
@@ -137,12 +136,12 @@ export default function ScoreOverlay({
         </div>
 
         {/* Hero Center Circular Profile Avatar (Hologram Ring) */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'clamp(10px, 1.8vh, 20px)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
           <div
             style={{
               position: 'relative',
-              width: 'clamp(70px, 10vh, 105px)',
-              height: 'clamp(70px, 10vh, 105px)',
+              width: '105px',
+              height: '105px',
               borderRadius: '50%',
               border: `2.5px solid ${themeColor}`,
               boxShadow: `0 0 30px ${glowColor}, inset 0 0 15px ${bgGlowColor}`,
