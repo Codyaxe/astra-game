@@ -180,7 +180,7 @@ export default function App() {
         nextStage: currentList[constellationIndex + 1]?.name,
       });
       setConstellationIndex((idx) => idx + 1);
-      setScreen('challenge');
+      setScreen('loading'); // 👈 Shows the Hyperspace Warp Loading screen between levels!
     } else {
       // Completed all session constellations -> Show Final Round Normalized Score
       console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Final Normalized Session Score:', 'color: #facc15; font-weight: bold;', `${averageScore}%`, updatedScores);
@@ -262,7 +262,7 @@ export default function App() {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#0a0e1a' }}>
       {/* Global Starfield Background */}
-      <StarfieldCanvas state={bgState} />
+      <StarfieldCanvas state={bgState} winDurationMs={6000} />
 
       {/* Global Cockpit Frame for In-Game screens */}
       {(screen === 'challenge' || screen === 'challenge_win_score' || screen === 'challenge_fail') && (

@@ -30,6 +30,7 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
   {
     state = 'idle', // 'idle' | 'warping' | 'settled' | 'turning' | 'sustained_warp' | 'impact' | 'frozen'
     turnDirection = 0, // -1 for turn left, +1 for turn right
+    winDurationMs = 6000,
     onImpactComplete,
     onSettledComplete,
   },
@@ -40,6 +41,8 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
   const starsRef = useRef([]);
   const embersRef = useRef([]);
   const crackLinesRef = useRef([]); // Jagged viewport glass fracture lines
+  const winDurationRef = useRef(winDurationMs);
+  winDurationRef.current = winDurationMs;
 
   // Animation state references
   const currentStateRef = useRef(state);
@@ -268,7 +271,8 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
 
       if (curState === 'sustained_warp') {
         if (!winStartTimeRef.current) winStartTimeRef.current = Date.now();
-        const elapsed = (Date.now() - winStartTimeRef.current) / 3600;
+        const duration = winDurationRef.current || 6000;
+        const elapsed = (Date.now() - winStartTimeRef.current) / duration;
         const p = Math.min(1.0, Math.max(0, elapsed));
 
         if (p < 0.35) {

@@ -100,10 +100,12 @@ export default function ChallengeScreen({
     };
   }, [constellationData?.id]);
 
+  const WIN_FLYBY_DURATION_MS = 6000; // 👈 Configurable: 3D Constellation Turn & Warp Flyby Duration
+  
   const startWinDialogue = useCallback((winResult) => {
     console.log('%c[ASTRA DIAGNOSTIC] 🎙️ startWinDialogue called with result:', 'color: #38bdf8; font-weight: bold;', winResult);
 
-    // Timeout safety fallback: guarantee win screen transitions even if dialogue audio stalls
+    // Timeout safety fallback: generous buffer so it NEVER cuts off the animation early!
     let safetyFired = false;
     const safetyTimer = setTimeout(() => {
       if (!safetyFired) {
@@ -111,7 +113,7 @@ export default function ChallengeScreen({
         console.log('%c[ASTRA DIAGNOSTIC] ⚡ Safety Timer triggered -> Advancing stage!', 'color: #facc15; font-weight: bold;');
         onComplete?.(winResult);
       }
-    }, 7000);
+    }, WIN_FLYBY_DURATION_MS + 9000);
 
     playSequence(
       DIALOGUE_CONFIG.phaseEWin,
@@ -133,8 +135,7 @@ export default function ChallengeScreen({
           function animateWinFlyby(timestamp) {
             if (!start) start = timestamp;
             const elapsed = timestamp - start;
-            const duration = 3600;
-            const progress = Math.min(1.0, elapsed / duration);
+            const progress = Math.min(1.0, elapsed / WIN_FLYBY_DURATION_MS);
             setWinFlybyProgress(progress);
             if (progress < 1.0) {
               requestAnimationFrame(animateWinFlyby);
