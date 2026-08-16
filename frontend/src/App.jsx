@@ -95,7 +95,10 @@ export default function App() {
     setScreen('challenge');
   }, []);
 
+  const [isStageWarping, setIsStageWarping] = useState(false);
+
   const handleChallengeComplete = useCallback((result) => {
+    setIsStageWarping(false);
     setLastAttemptResult(result || { isWin: true, score: 95 });
     if (result?.attempts_used !== undefined) {
       setPlayer((prev) => prev
@@ -103,8 +106,18 @@ export default function App() {
         : prev
       );
     }
-    setScreen('challenge_win_score');
-  }, []);
+
+    // Check if more constellations remain in the playlist
+    if (constellationIndex + 1 < constellations.length) {
+      console.log('%c[ASTRA] 🚀 Intermediate Constellation Solved -> Transitioning directly to next stage index:', 'color: #4ade80; font-weight: bold;', constellationIndex + 1);
+      setConstellationIndex((idx) => idx + 1);
+      setScreen('challenge');
+    } else {
+      // Completed all constellations -> Show Final Round Score & Leaderboard
+      console.log('%c[ASTRA] 🏆 All Constellations Cleared -> Displaying Final Victory Score Overlay!', 'color: #facc15; font-weight: bold;');
+      setScreen('challenge_win_score');
+    }
+  }, [constellationIndex, constellations.length]);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
     setLastAttemptResult(result || { isWin: false, score: 0 });
@@ -170,7 +183,8 @@ export default function App() {
 
   // Derive global starfield warp state
   const bgState =
-    screen === 'loading' ? 'warping'
+    isStageWarping ? 'sustained_warp'
+    : screen === 'loading' ? 'warping'
     : screen === 'challenge_win' || screen === 'challenge_win_score' ? 'sustained_warp'
     : screen === 'challenge_fail' ? 'impact'
     : screen === 'challenge' ? 'settled'
@@ -242,6 +256,7 @@ export default function App() {
           constellationIndex={constellationIndex}
           totalConstellations={constellations.length}
           attemptNumber={attemptNumber}
+          onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}
           onForceExit={handleForceExitOrDisqualified}

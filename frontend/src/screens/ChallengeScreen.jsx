@@ -69,6 +69,28 @@ export default function ChallengeScreen({
   // Win Fly-by 3D Expansion & Turn Animation State (3.6s duration)
   const [winFlybyProgress, setWinFlybyProgress] = useState(null);
 
+  // Stage Arrival Entry Transition (0.0 to 1.0 over 800ms)
+  const [entryProgress, setEntryProgress] = useState(0);
+
+  useEffect(() => {
+    setEntryProgress(0);
+    let start = null;
+    let animId = null;
+    function animateEntry(timestamp) {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(1.0, elapsed / 800);
+      setEntryProgress(progress);
+      if (progress < 1.0) {
+        animId = requestAnimationFrame(animateEntry);
+      }
+    }
+    animId = requestAnimationFrame(animateEntry);
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [constellationData?.id]);
+
   const startWinDialogue = useCallback((winResult) => {
     console.log('%c[ASTRA DIAGNOSTIC] 🎙️ startWinDialogue called with result:', 'color: #38bdf8; font-weight: bold;', winResult);
 
@@ -77,7 +99,7 @@ export default function ChallengeScreen({
     const safetyTimer = setTimeout(() => {
       if (!safetyFired) {
         safetyFired = true;
-        console.log('%c[ASTRA DIAGNOSTIC] ⚡ Safety Timer triggered -> Transitioning to Win Score Overlay!', 'color: #facc15; font-weight: bold;');
+        console.log('%c[ASTRA DIAGNOSTIC] ⚡ Safety Timer triggered -> Advancing stage!', 'color: #facc15; font-weight: bold;');
         onComplete?.(winResult);
       }
     }, 7000);
@@ -88,7 +110,7 @@ export default function ChallengeScreen({
         if (!safetyFired) {
           safetyFired = true;
           clearTimeout(safetyTimer);
-          console.log('%c[ASTRA DIAGNOSTIC] 🏁 Phase E Dialogue finished -> Transitioning to Win Score Overlay!', 'color: #4ade80; font-weight: bold;');
+          console.log('%c[ASTRA DIAGNOSTIC] 🏁 Phase E Dialogue finished -> Advancing stage!', 'color: #4ade80; font-weight: bold;');
           onComplete?.(winResult);
         }
       },
@@ -481,9 +503,9 @@ export default function ChallengeScreen({
     return () => window.removeEventListener('resize', onResize);
   }, [player, constellationData, attemptNumber, startTimer]);
 
-  // Calculate win 3D fly-by expansion and turn parameters
-  let winScale = 1.0;
-  let winOpacity = 1.0;
+  // Calculate presentation scale and opacity (Entrance Arrival Easing + Win Fly-by Turn)
+  let layerScale = 1.0;
+  let layerOpacity = 1.0;
   let winTurnX = 0;
   let winTurnY = 0;
 
@@ -492,19 +514,25 @@ export default function ChallengeScreen({
     if (p < 0.35) {
       // Phase 1: Bank Turn (Constellation & Stars sweep up-left together as camera rotates)
       const turnP = Math.sin((p / 0.35) * (Math.PI / 2));
-      winScale = 1.0 + turnP * 1.8;
-      winOpacity = 1.0 - turnP * 0.6;
+      layerScale = 1.0 + turnP * 1.8;
+      layerOpacity = 1.0 - turnP * 0.6;
       winTurnX = -turnP * 580;
       winTurnY = -turnP * 720;
     } else {
       // Phase 2: Straight Forward Hyperspace Acceleration (Radial point at CENTER, constellation cleared off-screen)
       const fwdP = (p - 0.35) / 0.65;
       const cubicFwd = Math.pow(fwdP, 3);
-      winScale = 2.8 + cubicFwd * 3.2;
-      winOpacity = Math.max(0, 0.4 - fwdP * 0.8);
+      layerScale = 2.8 + cubicFwd * 3.2;
+      layerOpacity = Math.max(0, 0.4 - fwdP * 0.8);
       winTurnX = -580 - fwdP * 300;
       winTurnY = -720 - fwdP * 300;
     }
+  } else if (entryProgress < 1.0) {
+    // Arrival: Drop out of hyperspace and settle into view smoothly
+    // Easing: cubic-out (1 - (1 - t)^3)
+    const easeOut = 1 - Math.pow(1 - entryProgress, 3);
+    layerScale = 0.88 + 0.12 * easeOut;
+    layerOpacity = easeOut;
   }
 
   return (
@@ -518,8 +546,8 @@ export default function ChallengeScreen({
         activeStarId={activeNode?.id}
         drawingPath={drawingPath}
         snapEffect={snapEffect}
-        opacity={winFlybyProgress !== null ? winOpacity : 1}
-        scale={winScale}
+        opacity={layerOpacity}
+        scale={layerScale}
         winTurnX={winTurnX}
         winTurnY={winTurnY}
         width={dimensions.w}
