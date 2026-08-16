@@ -7,12 +7,44 @@ export default function HUD({
   constellationName = 'Orion (Demo)',
 }) {
   const isTimeCritical = timeLeft <= 5;
+  const isWarning20 = timeLeft <= 20 && timeLeft > 10;
+  const isWarning10 = timeLeft <= 10 && timeLeft > 0;
+
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
   const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
   return (
     <>
+      {/* Emergency Red Warning Flashes Overlay */}
+      {(isWarning20 || isWarning10) && (
+        <div
+          className="hud-red-warning-vignette"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 18,
+            pointerEvents: 'none',
+            boxShadow: 'inset 0 0 120px rgba(229, 72, 77, 0.45)',
+            background: 'rgba(229, 72, 77, 0.08)',
+            animation: isWarning10
+              ? 'redPulseFast 0.5s ease-in-out infinite'
+              : 'redPulseSlow 1.0s ease-in-out infinite',
+          }}
+        >
+          <style>{`
+            @keyframes redPulseSlow {
+              0%, 100% { opacity: 0.15; }
+              50% { opacity: 0.85; }
+            }
+            @keyframes redPulseFast {
+              0%, 100% { opacity: 0.25; }
+              50% { opacity: 1.0; }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Upper-Left Constellation Target Badge */}
       <div
         className="hud-constellation-upper-left"

@@ -24,6 +24,9 @@ import { getMagneticSnap, calculateDistance } from '../game/snapping';
 import { playSfx } from '../utils/audio';
 import { startSession, submitAttempt } from '../services/api';
 import { PLACEHOLDER_STARS } from '../mock/placeholders';
+import SubtitleOverlay from '../components/dialogue/SubtitleOverlay';
+import useDialogueController from '../hooks/useDialogueController';
+import { DIALOGUE_CONFIG } from '../config/dialogueConfig';
 
 export default function ChallengeScreen({
   player,
@@ -46,33 +49,41 @@ export default function ChallengeScreen({
   const wandTravelDistRef = useRef(0);
   const prevPointerRef = useRef(null);
   const startTimeRef = useRef(Date.now());
+  const { activeSubtitle, playLine, playSequence, stopDialogue } = useDialogueController();
+  const hasPlayed20sRef = useRef(false);
+  const hasPlayed10sRef = useRef(false);
 
   // Win Fly-by 3D Expansion & Turn Animation State (3.6s duration)
   const [winFlybyProgress, setWinFlybyProgress] = useState(null);
 
-  const triggerWinSequence = useCallback((winResult) => {
-    onWinStart?.();
-    setWinFlybyProgress(0);
-    let start = null;
-    let animId;
-
-    function animateWinFlyby(timestamp) {
-      if (!start) start = timestamp;
-      const elapsed = timestamp - start;
-      const duration = 3600; // 3.6s fly-by acceleration delay
-      const progress = Math.min(1.0, elapsed / duration);
-
-      setWinFlybyProgress(progress);
-
-      if (progress < 1.0) {
-        animId = requestAnimationFrame(animateWinFlyby);
-      } else {
+  const startWinDialogue = useCallback((winResult) => {
+    playSequence(
+      DIALOGUE_CONFIG.phaseEWin,
+      () => {
+        // Line E3 finished -> mount Win Overlay
         onComplete?.(winResult);
+      },
+      (line) => {
+        if (line.triggers3DTurn) {
+          // Line E2 ("Heading locked"): start 3D turn animation!
+          onWinStart?.();
+          setWinFlybyProgress(0);
+          let start = null;
+          function animateWinFlyby(timestamp) {
+            if (!start) start = timestamp;
+            const elapsed = timestamp - start;
+            const duration = 3600;
+            const progress = Math.min(1.0, elapsed / duration);
+            setWinFlybyProgress(progress);
+            if (progress < 1.0) {
+              requestAnimationFrame(animateWinFlyby);
+            }
+          }
+          requestAnimationFrame(animateWinFlyby);
+        }
       }
-    }
-
-    animId = requestAnimationFrame(animateWinFlyby);
-  }, [onWinStart, onComplete]);
+    );
+  }, [playSequence, onWinStart, onComplete]);
 
   // Instantiate linked list model
   const constellationList = useMemo(() => {
@@ -172,10 +183,10 @@ export default function ChallengeScreen({
               recalibration_count: recalibrationCount,
               completed_status: 1,
             })
-              .then((res) => triggerWinSequence({ ...winResult, ...res }))
-              .catch(() => triggerWinSequence(winResult));
+              .then((res) => startWinDialogue({ ...winResult, ...res }))
+              .catch(() => startWinDialogue(winResult));
           } else {
-            triggerWinSequence(winResult);
+            startWinDialogue(winResult);
           }
         }
       } else {
@@ -247,7 +258,7 @@ export default function ChallengeScreen({
     setRecalibrationCount((c) => c + 1);
   }, []);
 
-  // Timer expiration: Disqualified
+  // Timer expiration: Disqualified (Plays Phase D dialogue lines D1 & D2 before eye blink closure)
   const handleTimerExpire = useCallback(async () => {
     playSfx('timerEnd');
     const elapsed = Date.now() - startTimeRef.current;
@@ -277,11 +288,27 @@ export default function ChallengeScreen({
         console.error(e);
       }
     }
-    onDisqualified?.(failResult);
-  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onDisqualified]);
+
+    // Play Phase D Fail Dialogue (D1 "That's not a match..." -> D2 "Brace, brace, BRA—") -> Eye Blink / Fail
+    playSequence(DIALOGUE_CONFIG.phaseDFail, () => {
+      onDisqualified?.(failResult);
+    });
+  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onDisqualified, playSequence]);
 
   const timeLimit = constellationList?.timeLimitSec || 30;
-  const { timeLeft, start: startTimer } = useGameTimer(timeLimit, handleTimerExpire);
+  const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, handleTimerExpire);
+
+  // Trigger Phase C Dialogue Warnings at 20s left and 10s left
+  useEffect(() => {
+    if (timeLeft === 20 && !hasPlayed20sRef.current) {
+      hasPlayed20sRef.current = true;
+      playLine(DIALOGUE_CONFIG.timeWarning20s);
+    }
+    if (timeLeft === 10 && !hasPlayed10sRef.current) {
+      hasPlayed10sRef.current = true;
+      playLine(DIALOGUE_CONFIG.timeWarning10s);
+    }
+  }, [timeLeft, playLine]);
 
   // ---- 2. Connection Cycle Completion (Tilt Forward -> Untilt) ----
   const currentSnappedRef = useRef(null);
@@ -305,6 +332,7 @@ export default function ChallengeScreen({
 
       // Check if finished full constellation
       if (updatedConns.length >= constellationList.getTotalRequiredConnections()) {
+        stopTimer();
         const elapsed = Date.now() - startTimeRef.current;
         const elapsedSec = Math.round(elapsed / 100) / 10;
         const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
@@ -330,10 +358,10 @@ export default function ChallengeScreen({
             recalibration_count: recalibrationCount,
             completed_status: 1,
           })
-            .then((res) => triggerWinSequence({ ...winResult, ...res }))
-            .catch(() => triggerWinSequence(winResult));
+            .then((res) => startWinDialogue({ ...winResult, ...res }))
+            .catch(() => startWinDialogue(winResult));
         } else {
-          triggerWinSequence(winResult);
+          startWinDialogue(winResult);
         }
       }
     } else {
@@ -462,6 +490,9 @@ export default function ChallengeScreen({
           constellationName={constellationData?.name || constellationList?.name || 'Orion (Demo)'}
         />
       )}
+
+      {/* Gameplay Subtitle Overlay */}
+      <SubtitleOverlay subtitle={dialogue.activeSubtitle} />
     </div>
   );
 }

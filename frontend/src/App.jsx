@@ -22,6 +22,9 @@ import ShipCockpitViewport from './components/starlink/ShipCockpitViewport';
 import HoloDeactivate from './components/HoloDeactivate';
 import ScoreOverlay from './components/starlink/ScoreOverlay';
 import EyelidBlinkOverlay from './components/starlink/EyelidBlinkOverlay';
+import SubtitleOverlay from './components/dialogue/SubtitleOverlay';
+import useDialogueController from './hooks/useDialogueController';
+import { DIALOGUE_CONFIG } from './config/dialogueConfig';
 
 const PREVIEW_CONSTELLATIONS = [
   {
@@ -160,7 +163,9 @@ export default function App() {
     }
   }, [screen]);
 
-  // Step 2 → Step 3: After visor settles, start the warp-in loading briefing
+  const appDialogue = useDialogueController();
+
+  // Step 2 → Step 3: Visor lowers, start Phase A Dialogue (Warp-In, lines A1-A3)
   useEffect(() => {
     if (screen === 'visor') {
       const timer = setTimeout(() => {
@@ -170,14 +175,24 @@ export default function App() {
     }
   }, [screen]);
 
-  // Step 3 → Step 3.5: After warp-in completes, trigger the HoloDeactivate exit animation
+  // Step 3 (Warp-In): Play Phase A Dialogue Sequence (A1, A2, A3) before overlay mounts
   useEffect(() => {
     if (screen === 'loading') {
-      const timer = setTimeout(() => {
-        setScreen('loading_exiting'); // starts holo CRT collapse animation
-      }, 5500);
-      return () => clearTimeout(timer);
+      appDialogue.playSequence(DIALOGUE_CONFIG.phaseA, () => {
+        setScreen('loading_briefing'); // Phase A finished -> mount Holographic Briefing Overlay!
+      });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
+
+  // Step 3b (Briefing Overlay): Play Phase B Dialogue Sequence (B1)
+  useEffect(() => {
+    if (screen === 'loading_briefing') {
+      appDialogue.playSequence(DIALOGUE_CONFIG.phaseB, () => {
+        setScreen('loading_exiting'); // Phase B finished -> start CRT power-off deactivation!
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
 
@@ -277,7 +292,7 @@ export default function App() {
   // 'challenge_win' and 'challenge_win_score' trigger and maintain sustained 3D warp fly-by streaks
   // 'challenge_fail' triggers screen shake, glass crack, red flash, then freezes ('frozen')
   const bgState =
-    screen === 'loading' || screen === 'loading_exiting' ? 'warping'
+    screen === 'loading' || screen === 'loading_briefing' || screen === 'loading_exiting' ? 'warping'
     : screen === 'challenge_win' || screen === 'challenge_win_score' ? 'sustained_warp'
     : screen === 'challenge_fail' ? 'impact'
     : screen === 'challenge_fail_score' ? 'frozen'
@@ -377,6 +392,11 @@ export default function App() {
         );
 
       case 'loading':
+        // Phase A Warp-In dialogue playing through cockpit (Overlay hidden)
+        return null;
+
+      case 'loading_briefing':
+        // Phase B Briefing Overlay mounts with Line B1
         return (
           <LoadingScreen
             message="Warping to celestial coordinates…"
@@ -486,6 +506,7 @@ export default function App() {
           {(
             screen === 'visor' ||
             screen === 'loading' ||
+            screen === 'loading_briefing' ||
             screen === 'loading_exiting' ||
             screen === 'challenge' ||
             screen === 'challenge_win' ||
@@ -506,6 +527,9 @@ export default function App() {
       <div className="app-screen-layer" style={{ position: 'absolute', inset: 0, zIndex: 50 }}>
         {renderScreen()}
       </div>
+
+      {/* Global Subtitle Overlay (Phase A & B Dialogue) */}
+      <SubtitleOverlay subtitle={appDialogue.activeSubtitle} />
     </div>
   );
 }
