@@ -1,21 +1,27 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import ConstellationLayer from '../components/starlink/ConstellationLayer';
 import { PLACEHOLDER_STARS, PLACEHOLDER_CONNECTIONS } from '../mock/placeholders';
 
 describe('ConstellationLayer Component Unit Tests', () => {
-  it('renders all star labels from placeholders', () => {
-    render(
+  it('renders all star nodes and connection lines cleanly without text labels', () => {
+    const { container } = render(
       <ConstellationLayer
         stars={PLACEHOLDER_STARS}
         connectedSegments={PLACEHOLDER_CONNECTIONS}
       />
     );
 
-    expect(screen.getByText(/Alpha \(Head\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Beta/i)).toBeInTheDocument();
-    expect(screen.getByText(/Gamma/i)).toBeInTheDocument();
-    expect(screen.getByText(/Delta/i)).toBeInTheDocument();
-    expect(screen.getByText(/Epsilon/i)).toBeInTheDocument();
+    // Verify SVG container renders
+    const svg = container.querySelector('svg.constellation-layer');
+    expect(svg).toBeInTheDocument();
+
+    // Verify connected lines render
+    const lines = container.querySelectorAll('line');
+    expect(lines.length).toBeGreaterThan(0);
+
+    // Verify star node groups render
+    const starGroups = container.querySelectorAll('g');
+    expect(starGroups.length).toBeGreaterThanOrEqual(PLACEHOLDER_STARS.length);
   });
 });

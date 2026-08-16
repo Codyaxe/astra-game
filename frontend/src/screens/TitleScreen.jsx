@@ -1,11 +1,4 @@
-/**
- * TitleScreen.jsx — Idle / attract screen.
- *
- * Looping background video + game logo.
- * Tapping or any interaction transitions to the Menu screen.
- * Auto-returns here when no player activity is detected.
- */
-
+import React, { useState, useCallback } from 'react';
 import starLoopVideo from '../assets/StarLoop.mp4';
 import titleQrCode from '../assets/QR Code.png';
 import astraIcon from '../assets/astraIcon.png';
@@ -36,11 +29,15 @@ const STATIC_CONSTELLATION_LINES = [
   { id: 'l8', left: '79.2%', top: '68.2%', width: '7.2%', rotate: '31deg' },
 ];
 
+export default function TitleScreen({ onStart, isExiting = false }) {
+  const handleClick = useCallback(() => {
+    if (isExiting) return;
+    onStart?.();
+  }, [isExiting, onStart]);
 
-export default function TitleScreen({ onStart }) {
   return (
-    <div className="screen screen--title" onClick={onStart}>
-      <div className="title-content title-layout" role="button" tabIndex={0}>
+    <div className="screen screen--title" onClick={handleClick}>
+      <div className={`title-content title-layout ${isExiting ? 'title-content--exiting' : ''}`} role="button" tabIndex={0}>
         <div className="title-brand" data-node-id="2:190">
           <img
             src={astraIcon}

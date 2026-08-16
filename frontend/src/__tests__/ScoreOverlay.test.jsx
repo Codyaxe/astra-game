@@ -9,7 +9,7 @@ describe('ScoreOverlay Component Unit Tests', () => {
     expect(screen.getByText(/Navigation Complete/i)).toBeInTheDocument();
     expect(screen.getByText(/SCORE: 98/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Hyper-navigation successful! Constellation linked./i)
+      screen.getByText(/congratulations, you are now/i)
     ).toBeInTheDocument();
   });
 

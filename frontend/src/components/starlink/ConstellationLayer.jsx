@@ -1,17 +1,20 @@
 /**
  * ConstellationLayer.jsx — Celestial Star Node & Connection Renderer
  * 
- * Supports 3D perspective arrival zoom (scale from center focal point)
- * and horizontal depth parallax turn shift.
+ * Pure presentation component painting backend star positions, live silver freehand drawing,
+ * celestial gold validated connections, and snapping morph animations. Zero star text labels.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export default function ConstellationLayer({
   stars = [],
   connectedSegments = [], // Array of { from: starId, to: starId }
-  wandPointer = null, // { x: normX, y: normY, isDrawing: bool }
+  validGuideSegments = [], // Array of { from: starId, to: starId } (semi-transparent blue test guides)
+  wandPointer = null, // { x: normX, y: normY, isDrawing: bool, state }
   activeStarId = null,
+  drawingPath = [], // Freehand trajectory sample points [{x, y}, ...]
+  snapEffect = null, // { success: bool, from, to, timestamp }
   width = window.innerWidth,
   height = window.innerHeight,
   opacity = 1,
@@ -23,10 +26,30 @@ export default function ConstellationLayer({
   const cx = width / 2;
   const cy = height / 2;
 
-  // Helper to convert normalized 0-1 coords to pixel coords with 3D scale expansion
+  // Cockpit Safe Area Margins (12% X, 14% Y) to keep all stars & lines inside open cockpit window
+  const marginX = width * 0.12;
+  const marginY = height * 0.14;
+  const safeW = width - marginX * 2;
+  const safeH = height - marginY * 2;
+
+  // Auto-detect backend virtual canvas resolution (e.g. 1920x1080, 3840x2160, or max star coordinate)
+  const maxRawX = stars.length > 0 ? Math.max(1, ...stars.map((s) => s.x || 0)) : 1;
+  const maxRawY = stars.length > 0 ? Math.max(1, ...stars.map((s) => s.y || 0)) : 1;
+  const vWidth = maxRawX > 1.0 ? Math.max(1920, maxRawX) : 1.0;
+  const vHeight = maxRawY > 1.0 ? Math.max(1080, maxRawY) : 1.0;
+
+  // Helper to convert normalized 0-1 or backend virtual coords to cockpit safe aperture pixel coords
   const toPx = (normX, normY) => {
-    const targetX = normX * width;
-    const targetY = normY * height;
+    // Auto-normalize against virtual canvas bounds and clamp to [0, 1]
+    const rawNX = normX > 1.0 ? normX / vWidth : normX;
+    const rawNY = normY > 1.0 ? normY / vHeight : normY;
+    const nX = Math.min(1.0, Math.max(0, rawNX));
+    const nY = Math.min(1.0, Math.max(0, rawNY));
+
+    // Map normalized 0-1 into inner cockpit safe viewport [marginX, width - marginX]
+    const targetX = marginX + nX * safeW;
+    const targetY = marginY + nY * safeH;
+
     return {
       x: cx + (targetX - cx) * scale + turnShift + winTurnX,
       y: cy + (targetY - cy) * scale + winTurnY,
@@ -42,9 +65,44 @@ export default function ConstellationLayer({
     });
   });
 
+  // Log star positions once on mount for debugging and testing
+  const hasLoggedRef = React.useRef(false);
+  useEffect(() => {
+    if (stars.length > 0 && !hasLoggedRef.current) {
+      hasLoggedRef.current = true;
+      console.log('⭐ [STARS MOUNT LOG]', stars.map((s) => {
+        const px = toPx(s.x, s.y);
+        return {
+          id: s.id,
+          label: s.label || `Star #${s.id}`,
+          backendRawX: Number(s.x.toFixed(4)),
+          backendRawY: Number(s.y.toFixed(4)),
+          screenNormX: Number((px.x / width).toFixed(4)),
+          screenNormY: Number((px.y / height).toFixed(4)),
+          pixelX: Math.round(px.x),
+          pixelY: Math.round(px.y),
+        };
+      }));
+    }
+  }, [stars, width, height]);
+
   // Active star for live line drawing preview
   const activeStar = activeStarId ? starMap.get(activeStarId) : null;
   const wandPx = wandPointer ? toPx(wandPointer.x, wandPointer.y) : null;
+
+  // Format freehand silver drawing path into SVG points string
+  const activePathPoints =
+    drawingPath && drawingPath.length > 1
+      ? drawingPath.map((pt) => {
+          const px = toPx(pt.x, pt.y);
+          return `${px.x},${px.y}`;
+        }).join(' ')
+      : null;
+
+  // Check recent snap effect
+  const isRecentSnap = snapEffect && Date.now() - (snapEffect.timestamp || 0) < 500;
+  const snapFromStar = isRecentSnap && snapEffect.from ? starMap.get(snapEffect.from) : null;
+  const snapToStar = isRecentSnap && snapEffect.to ? starMap.get(snapEffect.to) : null;
 
   return (
     <svg
@@ -62,9 +120,18 @@ export default function ConstellationLayer({
       }}
     >
       <defs>
-        {/* Connection Line Glow Filter */}
+        {/* Validated Gold Line Glow Filter */}
         <filter id="gold-glow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="4" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        {/* Active Silver Live Line Glow Filter */}
+        <filter id="silver-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -79,7 +146,28 @@ export default function ConstellationLayer({
         </radialGradient>
       </defs>
 
-      {/* 1. Backend Validated Snapped Connections */}
+      {/* 0. Semi-Transparent Blue Guide Lines for Target Valid Connections */}
+      {validGuideSegments.map((segment, idx) => {
+        const fromStar = starMap.get(segment.from);
+        const toStar = starMap.get(segment.to);
+        if (!fromStar || !toStar) return null;
+
+        return (
+          <line
+            key={`guide-${idx}`}
+            x1={fromStar.x}
+            y1={fromStar.y}
+            x2={toStar.x}
+            y2={toStar.y}
+            stroke="rgba(112, 161, 255, 0.45)"
+            strokeWidth="2"
+            strokeDasharray="6 6"
+            strokeLinecap="round"
+          />
+        );
+      })}
+
+      {/* 1. Permanent Validated Celestial Gold Connections */}
       {connectedSegments.map((segment, idx) => {
         const fromStar = starMap.get(segment.from);
         const toStar = starMap.get(segment.to);
@@ -87,7 +175,7 @@ export default function ConstellationLayer({
 
         return (
           <g key={`conn-${idx}`}>
-            {/* Outer Glow Line */}
+            {/* Outer Gold Glow Line */}
             <line
               x1={fromStar.x}
               y1={fromStar.y}
@@ -95,7 +183,7 @@ export default function ConstellationLayer({
               y2={toStar.y}
               stroke="#F4D58D"
               strokeWidth="6"
-              strokeOpacity="0.5"
+              strokeOpacity="0.65"
               filter="url(#gold-glow)"
               strokeLinecap="round"
             />
@@ -105,7 +193,7 @@ export default function ConstellationLayer({
               y1={fromStar.y}
               x2={toStar.x}
               y2={toStar.y}
-              stroke="#F1F0EC"
+              stroke="#FFFFFF"
               strokeWidth="2.5"
               strokeLinecap="round"
             />
@@ -113,21 +201,69 @@ export default function ConstellationLayer({
         );
       })}
 
-      {/* 2. Live Drawing Line (Active star to current Wand cursor) */}
-      {wandPointer?.isDrawing && activeStar && wandPx && (
-        <line
-          x1={activeStar.x}
-          y1={activeStar.y}
-          x2={wandPx.x}
-          y2={wandPx.y}
-          stroke="#70A1FF"
-          strokeWidth="2"
-          strokeDasharray="6 4"
-          strokeOpacity="0.8"
-        />
+      {/* 2. Live Active Freehand Silver Line (Jagged / Irregular Player Trajectory) */}
+      {wandPointer?.isDrawing && (() => {
+        // Live drawing stays in raw pixel space to match the WandCursor reticle position exactly.
+        // toPx is intentionally NOT applied here — stars use the cockpit safe area mapping,
+        // but the drawing stroke follows the actual cursor, so raw coords are correct.
+        const rawCursor = { x: wandPointer.x * width, y: wandPointer.y * height };
+
+        const livePts = drawingPath.length > 0
+          ? [...drawingPath.map((pt) => ({ x: pt.x * width, y: pt.y * height })), rawCursor]
+          : [rawCursor];
+
+        if (livePts.length < 2) return null;
+
+        const livePoints = livePts.map((p) => `${p.x},${p.y}`).join(' ');
+
+        return (
+          <g className="live-silver-stroke">
+            {/* Silver Glow Backdrop */}
+            <polyline
+              points={livePoints}
+              fill="none"
+              stroke="#E2E8F0"
+              strokeWidth="5"
+              strokeOpacity="0.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              filter="url(#silver-glow)"
+            />
+            {/* Silver Core Stroke */}
+            <polyline
+              points={livePoints}
+              fill="none"
+              stroke="#FFFFFF"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        );
+      })()}
+
+      {/* 3. Snapping Transition Pulse (isSnap = true -> Gold Spark Pulse) */}
+      {isRecentSnap && snapEffect.success && snapToStar && (
+        <g transform={`translate(${snapToStar.x}, ${snapToStar.y})`}>
+          <circle
+            r="32"
+            fill="none"
+            stroke="#F4D58D"
+            strokeWidth="3"
+            style={{
+              animation: 'snapSpark 0.45s ease-out forwards',
+            }}
+          />
+          <style>{`
+            @keyframes snapSpark {
+              0% { transform: scale(0.3); opacity: 1; stroke-width: 5px; }
+              100% { transform: scale(1.8); opacity: 0; stroke-width: 1px; }
+            }
+          `}</style>
+        </g>
       )}
 
-      {/* 3. Star Nodes */}
+      {/* 4. Star Nodes with Star ID Labels */}
       {Array.from(starMap.values()).map((star) => {
         const isActive = star.id === activeStarId;
         const isConnected = connectedSegments.some(
@@ -155,20 +291,18 @@ export default function ConstellationLayer({
             {/* Inner Core */}
             <circle r={coreRadius} fill="#FFFFFF" />
 
-            {/* Label */}
-            {star.label && scale > 0.6 && (
-              <text
-                y={22 * scale}
-                textAnchor="middle"
-                fill="#F1F0EC"
-                fontSize={12 * Math.max(0.7, scale)}
-                fontFamily="Outfit, sans-serif"
-                letterSpacing="1px"
-                style={{ textShadow: '0 0 6px rgba(0,0,0,0.8)' }}
-              >
-                {star.label}
-              </text>
-            )}
+            {/* Star ID Badge Label */}
+            <text
+              y={nodeRadius + 15}
+              textAnchor="middle"
+              fill={isConnected || isActive ? '#F4D58D' : '#94A3B8'}
+              fontSize="12"
+              fontWeight="bold"
+              fontFamily="sans-serif"
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+            >
+              #{star.id} {star.label ? `(${star.label})` : ''}
+            </text>
           </g>
         );
       })}

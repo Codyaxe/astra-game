@@ -60,10 +60,6 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
   useImperativeHandle(ref, () => ({
     freeze: () => {
       isFrozenRef.current = true;
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
     },
     unfreeze: () => {
       isFrozenRef.current = false;
@@ -72,6 +68,7 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
 
   const curFocalRef = useRef({ x: 0, y: 0 });
   const winStartTimeRef = useRef(null);
+  const warpStartTimeRef = useRef(null); // Tracks when warping acceleration began
   const phase2TeleportedRef = useRef(false);
 
   // Sync props to refs
@@ -84,7 +81,8 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
       phase2TeleportedRef.current = false;
       warpSpeedRef.current = 0.5; // Start slow for gradual ramp-up
     } else if (state === 'warping' && prevState !== 'warping') {
-      warpSpeedRef.current = 28.0;
+      warpSpeedRef.current = 1.2;          // Start from idle cruise — cubic ease-in begins now
+      warpStartTimeRef.current = Date.now(); // Record acceleration start time
       phase2TeleportedRef.current = false;
     } else if (state === 'idle' && prevState !== 'idle') {
       warpSpeedRef.current = 1.2;
@@ -94,12 +92,15 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
 
     if (state === 'frozen') {
       isFrozenRef.current = true;
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
     } else {
       isFrozenRef.current = false;
+    }
+
+    // Reset impact cracks, embers, and timing when leaving impact state
+    if (state !== 'impact') {
+      impactTimeRef.current = null;
+      crackLinesRef.current = [];
+      embersRef.current = [];
     }
 
     if (state === 'impact' && !impactTimeRef.current) {
@@ -236,8 +237,9 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
         } else {
           isFrozenRef.current = true;
           currentStateRef.current = 'frozen';
+          crackLinesRef.current = [];
+          embersRef.current = [];
           onImpactComplete?.();
-          return;
         }
       }
 
@@ -300,22 +302,36 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
           }
         }
       } else if (curState === 'warping') {
-        warpSpeedRef.current = Math.min(28.0, warpSpeedRef.current + 1.2);
+        // Cubic ease-in acceleration: starts sluggish, then surges into full hyperdrive over 4.5s
+        const WARP_RAMP_MS = 1000;
+        const elapsed = warpStartTimeRef.current ? Date.now() - warpStartTimeRef.current : 0;
+        const t = Math.min(1.0, elapsed / WARP_RAMP_MS);
+        const cubicT = t * t * t; // Ease-in cubic: near-zero at start, explosive at end
+        warpSpeedRef.current = 1.2 + cubicT * 32.0; // 1.2 idle cruise → 33.2 full hyperspace streaks
       } else if (curState === 'idle') {
+        // Deep space cruise mode (1.2 speed before warp)
         if (warpSpeedRef.current < 1.2) {
-          warpSpeedRef.current += 0.05;
+          warpSpeedRef.current = Math.min(1.2, warpSpeedRef.current + 0.05);
         } else if (warpSpeedRef.current > 1.2) {
-          warpSpeedRef.current *= 0.92;
+          warpSpeedRef.current *= 0.91;
+        } else {
+          warpSpeedRef.current = 1.2;
         }
-      } else {
+      } else if (curState === 'settled') {
+        // Arrived at target constellation: decelerates smoothly to rest (0.0 speed)
         const prevSpeed = warpSpeedRef.current;
         warpSpeedRef.current *= 0.91;
         if (warpSpeedRef.current < 0.05) {
-          warpSpeedRef.current = 0;
+          warpSpeedRef.current = 0.0;
           if (prevSpeed >= 0.05) {
             onSettledComplete?.();
           }
         }
+      } else if (curState === 'frozen') {
+        warpSpeedRef.current = 0.0;
+      } else {
+        warpSpeedRef.current *= 0.91;
+        if (warpSpeedRef.current < 0.05) warpSpeedRef.current = 0.0;
       }
 
       // Smooth 60 FPS LERP transition for radial focal point (no snapping!)
@@ -457,9 +473,7 @@ const StarfieldCanvas = forwardRef(function StarfieldCanvas(
 
       ctx.restore();
 
-      if (!isFrozenRef.current) {
-        animFrameRef.current = requestAnimationFrame(render);
-      }
+      animFrameRef.current = requestAnimationFrame(render);
     }
 
     animFrameRef.current = requestAnimationFrame(render);

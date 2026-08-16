@@ -1,50 +1,44 @@
 /**
- * HUD.jsx — Heads-up display during gameplay.
+ * HUD.jsx — Sleek Upper-Right Cockpit Timer Display
  */
 
-export default function HUD({
-  constellationName,
-  timeLeft,
-  attemptNumber = 1,
-  maxAttempts = 3,
-  wrongConnections = 0,
-  clicks = 0,
-  gestureStatus = 'Neutral',
-  onDraw = false,
-  recalibrations = 0,
-}) {
+export default function HUD({ timeLeft = 30 }) {
   const isTimeCritical = timeLeft <= 5;
+  const mins = Math.floor(timeLeft / 60);
+  const secs = timeLeft % 60;
+  const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
   return (
-    <div className="hud-container">
-      <div className="hud-top">
-        <div className="hud-left">
-          <span className="hud-constellation">✦ {constellationName || 'Loading…'}</span>
-          <span className="hud-attempt-badge">Attempt {attemptNumber} / {maxAttempts}</span>
-        </div>
-
-        <div className={`hud-timer ${isTimeCritical ? 'hud-timer--danger' : ''}`}>
-          ⏱ {timeLeft}s
-        </div>
-
-        <div className="hud-stats">
-          <span className="hud-stat">✕ Mistakes: {wrongConnections}</span>
-          <span className="hud-stat">👆 Clicks: {clicks}</span>
-          {recalibrations > 0 && <span className="hud-stat">↺ Recalibrated: {recalibrations}</span>}
-        </div>
-      </div>
-
-      <div className="hud-gesture-bar">
-        <span className={`gesture-pill ${onDraw ? 'gesture-pill--active' : ''}`}>
-          {gestureStatus}
-        </span>
-        <div className="gesture-help">
-          <span>Forward Tilt: <strong>Draw</strong></span>
-          <span>Left/Right Tilt: <strong>Reset Lines</strong></span>
-          <span>Circle: <strong>Force Exit</strong></span>
-          <span>Shake: <strong>Recalibrate</strong></span>
-        </div>
-      </div>
+    <div
+      className="hud-timer-upper-right"
+      style={{
+        position: 'absolute',
+        top: '24px',
+        right: '28px',
+        zIndex: 25,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        background: 'rgba(5, 8, 20, 0.75)',
+        border: `1.5px solid ${isTimeCritical ? '#E5484D' : '#F4D58D'}`,
+        boxShadow: `0 0 20px ${isTimeCritical ? 'rgba(229, 72, 77, 0.5)' : 'rgba(244, 213, 141, 0.35)'}, inset 0 0 10px rgba(244, 213, 141, 0.15)`,
+        backdropFilter: 'blur(10px)',
+        padding: '10px 22px',
+        borderRadius: '24px',
+        color: isTimeCritical ? '#E5484D' : '#F1F0EC',
+        fontFamily: "'Outfit', 'Sora', sans-serif",
+        fontWeight: 800,
+        fontSize: '1.3rem',
+        letterSpacing: '2px',
+        userSelect: 'none',
+        pointerEvents: 'none',
+        transition: 'all 0.3s ease',
+      }}
+    >
+      <span style={{ fontSize: '0.85rem', color: '#F4D58D', textTransform: 'uppercase', letterSpacing: '2px' }}>
+        ⏱ TIME
+      </span>
+      <span>{formatted}</span>
     </div>
   );
 }

@@ -26,7 +26,6 @@ export default function WandCursor({
         transform: `translate3d(${px}px, ${py}px, 0) translate(-50%, -50%)`,
         zIndex: 10,
         pointerEvents: 'none',
-        transition: 'transform 0.05s linear',
       }}
     >
       {/* Outer Reticle Ring */}
