@@ -95,9 +95,9 @@ export default function ConstellationLayer({
   const activePathPoints =
     drawingPath && drawingPath.length > 1
       ? drawingPath.map((pt) => {
-          const px = toPx(pt.x, pt.y);
-          return `${px.x},${px.y}`;
-        }).join(' ')
+        const px = toPx(pt.x, pt.y);
+        return `${px.x},${px.y}`;
+      }).join(' ')
       : null;
 
   // Check recent snap effect
@@ -316,11 +316,16 @@ export default function ConstellationLayer({
       {Array.from(starMap.values()).map((star) => {
         const isFake = Boolean(star.isFake || star.fake);
         const isActive = star.id === activeStarId;
-        const connectedSegment = connectedSegments.find(
+
+        // A star is connected if it appears in any completed segment
+        const isConnected = connectedSegments.some(
           (s) => s.from === star.id || s.to === star.id
         );
-        const isConnected = Boolean(connectedSegment);
-        const isWrongStar = Boolean(connectedSegment?.isWrong);
+
+        // If a star is part of AT LEAST ONE wrong connection, it must be styled RED despite  valid connection
+        const isWrongStar = connectedSegments.some(
+          (s) => (s.from === star.id || s.to === star.id) && s.isWrong
+        );
 
         // In Easy mode, fake stars are rendered visibly as White Dwarfs.
         // In Medium and Hard modes, fake stars look like normal authentic constellation stars!
@@ -338,8 +343,8 @@ export default function ConstellationLayer({
                 isWrongStar
                   ? "url(#star-aura-red)"
                   : showAsWhiteDwarf
-                  ? "rgba(148, 163, 184, 0.18)"
-                  : "url(#star-aura)"
+                    ? "rgba(148, 163, 184, 0.18)"
+                    : "url(#star-aura)"
               }
               className="star-node-aura"
             />
@@ -367,8 +372,8 @@ export default function ConstellationLayer({
                     isWrongStar
                       ? '#EF4444'
                       : isConnected || isActive
-                      ? '#F4D58D'
-                      : '#F1F0EC'
+                        ? '#F4D58D'
+                        : '#F1F0EC'
                   }
                 />
                 <circle r={coreRadius} fill={isWrongStar ? '#FCA5A5' : '#FFFFFF'} />
@@ -384,10 +389,10 @@ export default function ConstellationLayer({
                   isWrongStar
                     ? '#EF4444'
                     : showAsWhiteDwarf
-                    ? '#64748B'
-                    : isConnected || isActive
-                    ? '#F4D58D'
-                    : '#94A3B8'
+                      ? '#64748B'
+                      : isConnected || isActive
+                        ? '#F4D58D'
+                        : '#94A3B8'
                 }
                 fontSize="12"
                 fontWeight="bold"

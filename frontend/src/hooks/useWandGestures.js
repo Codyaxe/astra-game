@@ -94,31 +94,31 @@ export function useWandGestures({
       });
     }
 
-    // Forward Tilt / Pinch / Open Palm State Machine
-    const isDrawingGesture = detection.isDrawing;
-    if (isDrawingGesture && !holdRef.current && now - lastActionTimeRef.current > 180) {
-      holdRef.current = true;
-      drawRef.current = true;
-      lastActionTimeRef.current = now;
-      setOnHold(true);
-      setOnDraw(true);
-      setGestureStatus(
-        detection.isOpenPalm
-          ? 'Open Palm (Tracing)'
-          : detection.isPinching
-          ? 'Drawing (Pinch)'
-          : 'Drawing (Tilt Forward)'
-      );
-    } else if ((detection.isNeutralTilt || detection.isFist) && holdRef.current && now - lastActionTimeRef.current > 200) {
-      // Completed tilt / fist stop: registers connection or stops draw
+    // Direct Gesture State Mapping
+    const isDrawingGesture = detection.isOpenPalm || detection.isPinching || detection.isForwardTilt;
+    drawRef.current = isDrawingGesture && !detection.isFist;
+    setOnDraw(drawRef.current);
+
+    if (detection.isFist) {
+      setGestureStatus('Fist Closed (Paused)');
       holdRef.current = false;
-      drawRef.current = false;
-      lastActionTimeRef.current = now;
       setOnHold(false);
-      setOnDraw(false);
-      setGestureStatus(detection.isFist ? 'Fist Closed (Paused)' : 'Connected (Cycle Completed)');
-      onCompleteRef.current?.();
-      setTimeout(() => setGestureStatus('Neutral'), 500);
+    } else if (detection.isOpenPalm) {
+      setGestureStatus('Open Palm (Tracing)');
+      holdRef.current = true;
+      setOnHold(true);
+    } else if (detection.isPinching) {
+      setGestureStatus('Drawing (Pinch)');
+      holdRef.current = true;
+      setOnHold(true);
+    } else if (detection.isForwardTilt) {
+      setGestureStatus('Drawing (Tilt Forward)');
+      holdRef.current = true;
+      setOnHold(true);
+    } else {
+      setGestureStatus('Neutral / Pointing');
+      holdRef.current = false;
+      setOnHold(false);
     }
   }, []);
 

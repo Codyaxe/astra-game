@@ -55,14 +55,20 @@ export class GestureDetector {
       return Math.sqrt(dx * dx + dy * dy + dz * dz);
     };
 
-    const indexCurled = distToWrist(indexTip) < distToWrist(indexPip) * 1.05;
-    const middleCurled = distToWrist(middleTip) < distToWrist(middlePip) * 1.05;
-    const ringCurled = distToWrist(ringTip) < distToWrist(ringPip) * 1.05;
-    const pinkyCurled = distToWrist(pinkyTip) < distToWrist(pinkyPip) * 1.05;
+    // Strict per-finger curling checks relative to PIP/MCP joints & wrist
+    const indexCurled = distToWrist(indexTip) < distToWrist(indexPip) * 1.02;
+    const middleCurled = distToWrist(middleTip) < distToWrist(middlePip) * 1.02;
+    const ringCurled = distToWrist(ringTip) < distToWrist(ringPip) * 1.02;
+    const pinkyCurled = distToWrist(pinkyTip) < distToWrist(pinkyPip) * 1.02;
 
     const curledCount = (indexCurled ? 1 : 0) + (middleCurled ? 1 : 0) + (ringCurled ? 1 : 0) + (pinkyCurled ? 1 : 0);
-    const isFist = curledCount >= 3;
-    const isOpenPalm = curledCount <= 1;
+    const extendedCount = 4 - curledCount;
+
+    // TRUE Closed Fist: Index finger MUST be curled into palm, plus at least 2 other fingers
+    const isFist = indexCurled && curledCount >= 3;
+
+    // TRUE Open Palm: All or most fingers (including index) extended outwards
+    const isOpenPalm = !indexCurled && extendedCount >= 3;
 
     const now = Date.now();
     const point = {
@@ -73,6 +79,8 @@ export class GestureDetector {
       pinchDist,
       isFist,
       isOpenPalm,
+      curledCount,
+      extendedCount,
       time: now,
     };
 

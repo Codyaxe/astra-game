@@ -302,6 +302,7 @@ export default function App() {
           difficulty={gameSettings.difficulty || 'easy'}
           gestureStyle={gameSettings.gestureStyle || 'point_auto'}
           allowFakeNodeTrace={gameSettings.allowFakeNodeTrace ?? true}
+          snappingMode={gameSettings.snappingMode || 'sequential'}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}

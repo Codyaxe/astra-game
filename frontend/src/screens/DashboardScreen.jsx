@@ -614,6 +614,45 @@ export default function Dashboard({
                 </div>
               </div>
 
+              {/* Snapping Flow Mode (Sequential Chain vs Freeform) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Snapping Flow Mode:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { id: "sequential", label: "⛓️ Sequential (A➔B➔C)" },
+                      { id: "freeform", label: "✨ Freeform (Any Star)" },
+                    ].map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => onUpdateSettings({ snappingMode: s.id })}
+                        style={{
+                          background: (gameSettings.snappingMode || "sequential") === s.id ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.snappingMode || "sequential") === s.id ? "#fff" : colors.textDim,
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 10, color: colors.textDim, background: "rgba(0,0,0,0.25)", padding: "6px 10px", borderRadius: 8 }}>
+                  {(gameSettings.snappingMode || "sequential") === "sequential" ? (
+                    <span>⛓️ <b>Sequential Chain</b>: Once you snap A ➔ B, the base stays at B so you continue chained to B ➔ C, C ➔ D.</span>
+                  ) : (
+                    <span>✨ <b>Freeform Snapping</b>: Trace from any star to any star at any time (e.g. trace A ➔ B, then start a new trace from C ➔ A).</span>
+                  )}
+                </div>
+              </div>
+
               {/* Fake Star Decoy Snapping Toggle (Medium & Hard) */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
                 <div>
