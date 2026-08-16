@@ -19,12 +19,12 @@ export default function SubtitleOverlay({ subtitle = null }) {
     <div
       className="subtitle-overlay-container"
       style={{
-        position: 'absolute',
-        bottom: '48px',
+        position: 'fixed',
+        bottom: '36px',
         left: '50%',
         transform: 'translateX(-50%)',
-        zIndex: 100, // Rendered ABOVE all screen layers, backdrops, and blur cards (zIndex: 50)
-        width: 'min(820px, 90vw)',
+        zIndex: 9999, // Rendered on top of all screens, briefing codex, and HUD layers
+        width: 'min(860px, 90vw)',
         pointerEvents: 'none',
         userSelect: 'none',
         display: 'flex',

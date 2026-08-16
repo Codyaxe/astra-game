@@ -1,10 +1,3 @@
-/**
- * useDialogueController.js — Master Audio & Subtitle Queue Controller
- *
- * Plays sequential audio dialogue clips (.mp3) while displaying movie subtitles.
- * Features automatic duration fallback if MP3 files are missing or blocked by browser autoplay policies.
- */
-
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 export default function useDialogueController() {
@@ -17,15 +10,19 @@ export default function useDialogueController() {
 
   const stopDialogue = useCallback(() => {
     isCancelledRef.current = true;
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.onended = null;
-      audioRef.current.onerror = null;
-      audioRef.current = null;
-    }
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
+    }
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+      } catch (e) {}
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current = null;
     }
     setActiveSubtitle(null);
     setIsPlaying(false);
@@ -49,8 +46,8 @@ export default function useDialogueController() {
       triggersWarpStreaks: lineObj.triggersWarpStreaks,
     });
 
-    const textDuration = lineObj.textDurationMs || 4000;
-    const postDelay = lineObj.postDelayMs || 300;
+    const textDuration = lineObj.textDurationMs || 8500;
+    const postDelay = lineObj.postDelayMs !== undefined ? lineObj.postDelayMs : 650;
 
     let hasAdvanced = false;
 
@@ -58,10 +55,21 @@ export default function useDialogueController() {
       if (hasAdvanced || isCancelledRef.current) return;
       hasAdvanced = true;
 
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+        } catch (e) {}
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current = null;
+      }
+
       setActiveSubtitle(null);
       setIsPlaying(false);
 
-      if (lineObj.postDelayMs) {
+      if (postDelay > 0) {
         timerRef.current = setTimeout(() => {
           if (!isCancelledRef.current) onComplete?.();
         }, postDelay);
@@ -70,27 +78,31 @@ export default function useDialogueController() {
       }
     };
 
-    // Try playing MP3 audio file if specified
     if (lineObj.audioPath) {
       try {
         const audio = new Audio(lineObj.audioPath);
         audioRef.current = audio;
 
         audio.onended = advance;
-        audio.onerror = () => {
-          // Fallback to text duration if audio file missing
-          timerRef.current = setTimeout(advance, textDuration);
+        audio.onerror = (err) => {
+          console.warn('[ASTRA AUDIO] Error loading audio file, fallback to text timer:', lineObj.audioPath, err);
+          if (!isCancelledRef.current) {
+            timerRef.current = setTimeout(advance, textDuration);
+          }
         };
 
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(() => {
-            // Autoplay policy fallback
+        const p = audio.play();
+        if (p !== undefined) {
+          p.catch((err) => {
+            if (isCancelledRef.current || err.name === 'AbortError') return;
+            console.warn('[ASTRA AUDIO] Autoplay prevented, fallback to text duration:', err);
             timerRef.current = setTimeout(advance, textDuration);
           });
         }
       } catch (err) {
-        timerRef.current = setTimeout(advance, textDuration);
+        if (!isCancelledRef.current) {
+          timerRef.current = setTimeout(advance, textDuration);
+        }
       }
     } else {
       timerRef.current = setTimeout(advance, textDuration);
@@ -109,7 +121,7 @@ export default function useDialogueController() {
 
       let currentIndex = 0;
 
-      function step() {
+      function playNextLine() {
         if (isCancelledRef.current || currentIndex >= sequence.length) {
           setActiveSubtitle(null);
           setIsPlaying(false);
@@ -117,30 +129,53 @@ export default function useDialogueController() {
           return;
         }
 
-        const currentLine = sequence[currentIndex];
-        onLineStart?.(currentLine, currentIndex);
+        // Hard stop any previous audio before starting new line
+        if (audioRef.current) {
+          try {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current.src = '';
+          } catch (e) {}
+          audioRef.current.onended = null;
+          audioRef.current.onerror = null;
+          audioRef.current = null;
+        }
+
+        const line = sequence[currentIndex];
+        onLineStart?.(line, currentIndex);
 
         setIsPlaying(true);
         setActiveSubtitle({
-          speaker: currentLine.speaker || 'SHIP AI',
-          text: currentLine.text,
-          id: currentLine.id,
-          triggers3DTurn: currentLine.triggers3DTurn,
-          triggersWarpStreaks: currentLine.triggersWarpStreaks,
+          speaker: line.speaker || 'SHIP AI',
+          text: line.text,
+          id: line.id,
+          triggers3DTurn: line.triggers3DTurn,
+          triggersWarpStreaks: line.triggersWarpStreaks,
         });
 
-        const textDuration = currentLine.textDurationMs || 4000;
-        const postDelay = currentLine.postDelayMs || 300;
+        const textDuration = line.textDurationMs || 8500;
+        const postDelay = line.postDelayMs !== undefined ? line.postDelayMs : 650;
 
-        let hasAdvanced = false;
+        let hasMoved = false;
 
-        const advanceToNext = () => {
-          if (hasAdvanced || isCancelledRef.current) return;
-          hasAdvanced = true;
+        const next = () => {
+          if (hasMoved || isCancelledRef.current) return;
+          hasMoved = true;
+
+          if (audioRef.current) {
+            try {
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+              audioRef.current.src = '';
+            } catch (e) {}
+            audioRef.current.onended = null;
+            audioRef.current.onerror = null;
+            audioRef.current = null;
+          }
 
           currentIndex += 1;
           if (currentIndex < sequence.length) {
-            timerRef.current = setTimeout(step, postDelay);
+            timerRef.current = setTimeout(playNextLine, postDelay);
           } else {
             setActiveSubtitle(null);
             setIsPlaying(false);
@@ -148,36 +183,42 @@ export default function useDialogueController() {
           }
         };
 
-        if (currentLine.audioPath) {
+        if (line.audioPath) {
           try {
-            const audio = new Audio(currentLine.audioPath);
+            const audio = new Audio(line.audioPath);
             audioRef.current = audio;
 
-            audio.onended = advanceToNext;
-            audio.onerror = () => {
-              timerRef.current = setTimeout(advanceToNext, textDuration);
+            audio.onended = next;
+            audio.onerror = (err) => {
+              console.warn('[ASTRA AUDIO] Error loading sequence audio:', line.audioPath, err);
+              if (!isCancelledRef.current) {
+                timerRef.current = setTimeout(next, textDuration);
+              }
             };
 
             const playPromise = audio.play();
             if (playPromise !== undefined) {
-              playPromise.catch(() => {
-                timerRef.current = setTimeout(advanceToNext, textDuration);
+              playPromise.catch((err) => {
+                if (isCancelledRef.current || err.name === 'AbortError') return;
+                console.warn('[ASTRA AUDIO] Sequence autoplay blocked, using timer fallback:', err);
+                timerRef.current = setTimeout(next, textDuration);
               });
             }
           } catch (err) {
-            timerRef.current = setTimeout(advanceToNext, textDuration);
+            if (!isCancelledRef.current) {
+              timerRef.current = setTimeout(next, textDuration);
+            }
           }
         } else {
-          timerRef.current = setTimeout(advanceToNext, textDuration);
+          timerRef.current = setTimeout(next, textDuration);
         }
       }
 
-      step();
+      playNextLine();
     },
     [stopDialogue]
   );
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopDialogue();
