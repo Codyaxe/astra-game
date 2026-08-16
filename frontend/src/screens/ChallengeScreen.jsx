@@ -205,9 +205,8 @@ export default function ChallengeScreen({
    * In production: this decision comes from the backend via WebSocket (isSnap: true/false).
    * Validates bidirectional edge (A -> B or B -> A) against constellation target.
    */
-  const [snapEffect, setSnapEffect] = useState(null);
-
   const handleDragComplete = useCallback(({ fromStarId, toStarId }) => {
+    if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (fromStarId != null && toStarId != null) {
       // Find if this exact edge (fromStarId <-> toStarId) already exists in completedConnections
       const existingConnIdx = completedConnections.findIndex(
@@ -378,15 +377,17 @@ export default function ChallengeScreen({
 
   // Left/Right tilt: Reset lines
   const handleResetLines = useCallback(() => {
+    if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (constellationList) {
       setCompletedConnections([]);
       setActiveNode(constellationList.getHead());
       playSfx('wrong');
     }
-  }, [constellationList]);
+  }, [constellationList, winFlybyProgress]);
 
   // Circle motion: Force Emergency Exit
   const handleCircleExit = useCallback(async () => {
+    if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (!sessionId) {
       onForceExit?.();
       return;
@@ -405,7 +406,7 @@ export default function ChallengeScreen({
       console.error(e);
     }
     onForceExit?.();
-  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onForceExit]);
+  }, [sessionId, wrongConnections, totalClicks, recalibrationCount, onForceExit, winFlybyProgress]);
 
   // Shake: Recalibrate
   const handleRecalibrate = useCallback(() => {
@@ -475,6 +476,7 @@ export default function ChallengeScreen({
   const currentSnappedRef = useRef(null);
 
   const handleConnectionCycleComplete = useCallback(async () => {
+    if (hasEndedRef.current || winFlybyProgress !== null) return;
     setTotalClicks((c) => c + 1);
 
     const snapped = currentSnappedRef.current;
@@ -562,6 +564,7 @@ export default function ChallengeScreen({
   const lastAutoSnapTimeRef = useRef(0);
 
   useEffect(() => {
+    if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (!pointer || (controlMode !== 'wand' && controlMode !== 'hybrid')) return;
 
     const allStars = [...starNodes, ...fakeNodes];
