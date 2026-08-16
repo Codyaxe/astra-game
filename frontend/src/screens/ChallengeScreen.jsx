@@ -205,6 +205,8 @@ export default function ChallengeScreen({
    * In production: this decision comes from the backend via WebSocket (isSnap: true/false).
    * Validates bidirectional edge (A -> B or B -> A) against constellation target.
    */
+  const [snapEffect, setSnapEffect] = useState(null);
+
   const handleDragComplete = useCallback(({ fromStarId, toStarId }) => {
     if (hasEndedRef.current || winFlybyProgress !== null) return;
     if (fromStarId != null && toStarId != null) {
