@@ -229,7 +229,8 @@ export default function ChallengeScreen({
       // If the exact edge already exists: UNTRACE / REMOVE ONLY THIS SPECIFIC EDGE!
       if (existingConnIdx !== -1) {
         console.log('%c[ASTRA DIAGNOSTIC] ↩️ Specific Edge Removed (Untraced):', 'color: #f59e0b; font-weight: bold;', fromStarId, '<->', toStarId);
-        setCompletedConnections((prev) => prev.filter((_, idx) => idx !== existingConnIdx));
+        const nextConns = completedConnections.filter((_, idx) => idx !== existingConnIdx);
+        setCompletedConnections(nextConns);
         if (snappingMode === 'freeform') {
           setActiveNode(null);
           activeNodeRef.current = null;
@@ -241,6 +242,46 @@ export default function ChallengeScreen({
           }
         }
         playSfx('snap');
+
+        // Check if removing the wrong edge now allows completion!
+        const requiredCount = validGuideSegments.length > 0 ? validGuideSegments.length : starNodes.length - 1;
+        const validConnCount = nextConns.filter((c) => !c.isWrong).length;
+        const hasWrongConnections = nextConns.some((c) => c.isWrong);
+
+        if (validConnCount >= requiredCount && !hasWrongConnections) {
+          if (!hasEndedRef.current) {
+            hasEndedRef.current = true;
+            setActiveNode(null);
+            activeNodeRef.current = null;
+            stopTimer();
+
+            setIsBriefingActive(false);
+            stopDialogue();
+            console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED (Wrong edge untraced)!', 'color: #4ade80; font-weight: bold;');
+
+            const elapsed = Date.now() - startTimeRef.current;
+            const elapsedSec = Math.round(elapsed / 100) / 10;
+            const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
+
+            const limitSec = timeLimit || 30;
+            const timeRatio = Math.min(1.0, elapsedSec / limitSec);
+            const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
+            const calculatedScore = Math.round((70 + speedScore) * 10) / 10;
+
+            const winResult = {
+              completed_status: 1,
+              isWin: true,
+              score: calculatedScore,
+              telemetry: {
+                time_spent_sec: elapsedSec,
+                wrong_attempts: wrongConnections,
+                travel_dist_cm: travelCm,
+              },
+            };
+
+            startWinDialogue(winResult);
+          }
+        }
         return;
       }
 
@@ -265,33 +306,35 @@ export default function ChallengeScreen({
         }
         playSfx('snap');
 
-        // Check if finished full constellation
+        // Check if finished full constellation (MUST have required count AND zero wrong connections)
         const requiredCount = validGuideSegments.length > 0 ? validGuideSegments.length : starNodes.length - 1;
         const validConnCount = updatedConns.filter((c) => !c.isWrong).length;
+        const hasWrongConnections = updatedConns.some((c) => c.isWrong);
         console.log('%c[ASTRA DIAGNOSTIC] 🔗 Snap Connection Added!', 'color: #38bdf8;', {
           from: fromStarId,
           to: toStarId,
           validConnCount,
           requiredCount,
+          hasWrongConnections,
           snappingMode,
         });
 
-        if (validConnCount >= requiredCount) {
+        if (validConnCount >= requiredCount && !hasWrongConnections) {
           if (hasEndedRef.current) return;
           hasEndedRef.current = true;
           setActiveNode(null);
           stopTimer();
 
-          // Full Aries Constellation Completed -> End Briefing
+          // Full Constellation Completed -> End Briefing
           setIsBriefingActive(false);
           stopDialogue();
-          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED -> Briefing Ended!', 'color: #4ade80; font-weight: bold;');
+          console.log('%c[ASTRA DIAGNOSTIC] ✨ FULL CONSTELLATION COMPLETED -> Zero wrong connections remaining!', 'color: #4ade80; font-weight: bold;');
 
           const elapsed = Date.now() - startTimeRef.current;
           const elapsedSec = Math.round(elapsed / 100) / 10;
           const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
 
-          // Percentage Scoring: 70% Completion + up to 30% Speed Bonus (0% mistake penalty)
+          // Percentage Scoring: 70% Completion + up to 30% Speed Bonus
           const limitSec = timeLimit || 30;
           const timeRatio = Math.min(1.0, elapsedSec / limitSec);
           const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
