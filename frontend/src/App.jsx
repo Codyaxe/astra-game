@@ -175,18 +175,25 @@ export default function App() {
     const currentList = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
     if (constellationIndex + 1 < currentList.length) {
       console.log('%c[ASTRA] 🚀 Stage Solved -> Warping to next randomized constellation:', 'color: #4ade80; font-weight: bold;', {
-        stageScore: `${stageScore}%`,
-        runningSessionAverage: `${averageScore}%`,
+        stageScore: `${stageScore} PTS`,
+        runningSessionAverage: `${averageScore} PTS`,
         nextStage: currentList[constellationIndex + 1]?.name,
       });
       setConstellationIndex((idx) => idx + 1);
       setScreen('loading'); // 👈 Shows the Hyperspace Warp Loading screen between levels!
     } else {
-      // Completed all session constellations -> Show Final Round Normalized Score
-      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Final Normalized Session Score:', 'color: #facc15; font-weight: bold;', `${averageScore}%`, updatedScores);
+      // Completed all session constellations -> Sync final normalized average to backend & show score
+      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Final Normalized Session Score:', 'color: #facc15; font-weight: bold;', `${averageScore} PTS`, updatedScores);
+      if (player?.id) {
+        submitAttempt({
+          player_id: player.id,
+          score: averageScore,
+          completed_status: 1,
+        }).catch((e) => console.warn('[ASTRA] Final score sync warning:', e));
+      }
       setScreen('challenge_win_score');
     }
-  }, [constellationIndex, sessionStageScores, sessionPlaylist, constellations]);
+  }, [constellationIndex, sessionStageScores, sessionPlaylist, constellations, player?.id]);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
     setLastAttemptResult(result || { isWin: false, score: 0 });

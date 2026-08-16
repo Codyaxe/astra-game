@@ -30,7 +30,10 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
   }, [searchQuery]);
 
   const currentPlayerRow = leaderboard.find(
-    (row) => row.player_id === player?.id
+    (row) =>
+      (row.player_id && player?.id && String(row.player_id) === String(player.id)) ||
+      (row.id && player?.id && String(row.id) === String(player.id)) ||
+      (row.sr_code && player?.sr_code && row.sr_code.toLowerCase() === player.sr_code.toLowerCase())
   );
 
   const attemptsUsed =
@@ -43,15 +46,21 @@ export default function LeaderboardScreen({ player, lastAttemptResult, onRetry, 
 
   const bestScore =
     currentPlayerRow?.highest_score ??
+    currentPlayerRow?.best_score ??
     lastAttemptResult?.best_score ??
+    lastAttemptResult?.score ??
     player?.best_score ??
     0;
 
   // Derived stats
   const totalParticipants = leaderboard.length;
   const yourRank = currentPlayerRow
-    ? leaderboard.findIndex((r) => r.player_id === player?.id) + 1
-    : null;
+    ? leaderboard.indexOf(currentPlayerRow) + 1
+    : (bestScore > 0 && totalParticipants > 0
+      ? (leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) !== -1
+        ? leaderboard.findIndex((r) => (r.highest_score || r.best_score || 0) <= bestScore) + 1
+        : totalParticipants + 1)
+      : (bestScore > 0 ? 1 : null));
 
   // Top 3 and the rest
   const podium = leaderboard.slice(0, 3);

@@ -101,10 +101,15 @@ export function validateStep(constellationId, fromNodeId, toNodeId) {
   });
 }
 
-export function submitAttempt(sessionId, telemetry) {
+export function submitAttempt(payloadOrSessionId, telemetry = {}) {
+  const body =
+    typeof payloadOrSessionId === 'object'
+      ? payloadOrSessionId
+      : { session_id: payloadOrSessionId, ...telemetry };
+
   return _fetch('/game/submit', {
     method: 'POST',
-    body: JSON.stringify({ session_id: sessionId, ...telemetry }),
+    body: JSON.stringify(body),
   });
 }
 

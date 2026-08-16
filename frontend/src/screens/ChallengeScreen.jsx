@@ -50,6 +50,21 @@ export default function ChallengeScreen({
   const [activeNode, setActiveNode] = useState(null);
   const [dimensions, setDimensions] = useState({ w: window.innerWidth, h: window.innerHeight });
 
+  // Initialize backend game session for telemetry and score recording
+  useEffect(() => {
+    if (player?.id) {
+      startSession(player.id, constellationData?.id || 1)
+        .then((res) => {
+          if (res?.session_id) {
+            setSessionId(res.session_id);
+          }
+        })
+        .catch((err) => {
+          console.warn('[ASTRA] Could not start backend session, using direct player submit:', err);
+        });
+    }
+  }, [player?.id, constellationData?.id]);
+
   // Telemetry
   const [wrongConnections, setWrongConnections] = useState(0);
   const [totalClicks, setTotalClicks] = useState(0);
@@ -283,14 +298,19 @@ export default function ChallengeScreen({
             },
           };
 
-          if (sessionId) {
-            submitAttempt(sessionId, {
+          if (sessionId || player?.id) {
+            submitAttempt({
+              session_id: sessionId,
+              player_id: player?.id,
+              score: calculatedScore,
               time_elapsed_ms: elapsed,
               wrong_connections: wrongConnections,
               total_clicks: totalClicks + 1,
               wand_travel_dist: wandTravelDistRef.current,
               recalibration_count: recalibrationCount,
               completed_status: 1,
+              completed_connections: completedConnections.length + 1,
+              total_connections: validGuideSegments.length || (starNodes.length - 1),
             })
               .then((res) => startWinDialogue({ ...winResult, ...res }))
               .catch(() => startWinDialogue(winResult));
