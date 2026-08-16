@@ -84,8 +84,17 @@ export default function ChallengeScreen({
 
   // Timer expiration handler (forward declared via ref to avoid circular dependency)
   const timerExpireRef = useRef(null);
-  const baseTime = constellationList?.timeLimitSec || 30;
-  const timeLimit = difficulty === 'hard' ? Math.max(10, Math.floor(baseTime / 2)) : baseTime;
+  const baseTime = Number(constellationData?.time_limit_sec || constellationList?.timeLimitSec || 30);
+  const timeLimit = useMemo(() => {
+    if (difficulty === 'hard') {
+      return Math.max(10, Math.round(baseTime * 0.5)); // Halved for Hard (e.g. 40s -> 20s, 30s -> 15s)
+    }
+    if (difficulty === 'medium') {
+      return Math.max(15, Math.round(baseTime * 0.75)); // 75% for Medium (e.g. 40s -> 30s)
+    }
+    return baseTime; // Full seeded time limit for Easy / Normal
+  }, [baseTime, difficulty]);
+
   const { timeLeft, start: startTimer, stop: stopTimer } = useGameTimer(timeLimit, (elapsed) => {
     if (timerExpireRef.current) timerExpireRef.current(elapsed);
   });

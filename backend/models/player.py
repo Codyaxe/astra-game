@@ -132,7 +132,8 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
     attempt_sums = execute(avg_query, (player_id,))
 
     best_score = max(current_best, float(new_score or 0.0))
-    attempts_used = player.get("total_attempts_used", 0)
+    current_used = int(player.get("total_attempts_used") or 0)
+    attempts_used = min(MAX_ATTEMPTS, current_used + 1)
 
     for attempt in attempt_sums:
         att_num = attempt.get("attempt_number") or 1
@@ -141,10 +142,8 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
         if avg > best_score:
             best_score = avg
         if att_num > attempts_used:
-            attempts_used = att_num
+            attempts_used = min(MAX_ATTEMPTS, att_num)
 
-    # Ensure attempts_used is sensible and capped
-    attempts_used = min(MAX_ATTEMPTS, max(attempts_used, player.get("total_attempts_used", 0), 1))
     best_score = round(best_score, 1)
 
     execute(

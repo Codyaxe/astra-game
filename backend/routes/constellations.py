@@ -11,7 +11,7 @@ constellations_bp = Blueprint("constellations", __name__, url_prefix="/api/const
 @constellations_bp.route("/", methods=["GET"])
 def list_constellations():
     """Return all constellation definitions (nodes, edges, fake nodes, time limits)."""
-    return jsonify({"constellations": get_all()}), 200
+    return jsonify(get_all()), 200
 
 
 @constellations_bp.route("/<int:constellation_id>", methods=["GET"])

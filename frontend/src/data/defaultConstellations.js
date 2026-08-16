@@ -26,7 +26,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 2,
     name: 'Big Dipper',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 40,
     star_nodes: [
       { id: 0, label: 'Alkaid', x: 0.20, y: 0.45, next_node_id: 1,    hitbox_radius: 0.055 },
       { id: 1, label: 'Mizar',  x: 0.32, y: 0.42, next_node_id: 2,    hitbox_radius: 0.055 },
@@ -46,7 +46,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 3,
     name: 'Orion',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 40,
     star_nodes: [
       { id: 0, label: 'Betelgeuse', x: 0.35, y: 0.25, next_node_id: 1,    hitbox_radius: 0.055 },
       { id: 1, label: 'Bellatrix',  x: 0.60, y: 0.23, next_node_id: 2,    hitbox_radius: 0.055 },
@@ -66,7 +66,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 4,
     name: 'Gemini',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 45,
     star_nodes: [
       { id: 0, label: 'Castor',  x: 0.38, y: 0.20, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Pollux',  x: 0.55, y: 0.22, next_node_id: 2, hitbox_radius: 0.055 },
@@ -86,7 +86,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 5,
     name: 'Taurus',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 40,
     star_nodes: [
       { id: 0, label: 'Aldebaran',  x: 0.52, y: 0.48, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Elnath',     x: 0.38, y: 0.28, next_node_id: 2, hitbox_radius: 0.055 },
@@ -107,7 +107,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 6,
     name: 'Libra',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 35,
     star_nodes: [
       { id: 0, label: 'Zubeneschamali', x: 0.50, y: 0.25, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Zubenelgenubi',  x: 0.32, y: 0.45, next_node_id: 2, hitbox_radius: 0.055 },
@@ -126,7 +126,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 7,
     name: 'Leo',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 40,
     star_nodes: [
       { id: 0, label: 'Regulus',    x: 0.25, y: 0.52, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Algieba',    x: 0.40, y: 0.38, next_node_id: 2, hitbox_radius: 0.055 },
@@ -147,7 +147,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 8,
     name: 'Scorpius',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 45,
     star_nodes: [
       { id: 0, label: 'Antares',  x: 0.45, y: 0.45, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Graffias', x: 0.35, y: 0.28, next_node_id: 2, hitbox_radius: 0.055 },
@@ -168,7 +168,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 9,
     name: 'Cassiopeia',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 35,
     star_nodes: [
       { id: 0, label: 'Schedar',   x: 0.18, y: 0.42, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Caph',      x: 0.34, y: 0.25, next_node_id: 2, hitbox_radius: 0.055 },
@@ -187,7 +187,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 10,
     name: 'Cygnus',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 40,
     star_nodes: [
       { id: 0, label: 'Deneb',       x: 0.50, y: 0.18, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Sadr',        x: 0.50, y: 0.45, next_node_id: 2, hitbox_radius: 0.055 },
@@ -206,7 +206,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 11,
     name: 'Ursa Major',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 50,
     star_nodes: [
       { id: 0, label: 'Dubhe',   x: 0.70, y: 0.25, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Merak',   x: 0.68, y: 0.43, next_node_id: 2, hitbox_radius: 0.055 },
@@ -229,7 +229,7 @@ export const DEFAULT_CONSTELLATIONS = [
     id: 12,
     name: 'Canis Major',
     head_node_id: 0,
-    time_limit_sec: 30,
+    time_limit_sec: 35,
     star_nodes: [
       { id: 0, label: 'Sirius',    x: 0.48, y: 0.25, next_node_id: 1, hitbox_radius: 0.055 },
       { id: 1, label: 'Mirzam',    x: 0.30, y: 0.42, next_node_id: 2, hitbox_radius: 0.055 },

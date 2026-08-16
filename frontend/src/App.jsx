@@ -57,12 +57,14 @@ export default function App() {
 
     getConstellations()
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setConstellations(data);
+        const list = Array.isArray(data) ? data : (data?.constellations || []);
+        if (Array.isArray(list) && list.length > 0) {
+          console.log('%c[ASTRA] 🌌 Retrieved ' + list.length + ' live constellations from MySQL backend (seed.py):', 'color: #4ade80; font-weight: bold;', list.map(c => c.name));
+          setConstellations(list);
         }
       })
       .catch((err) => {
-        console.warn('Backend unavailable, using default constellations:', err);
+        console.warn('Backend unavailable, using default fallback constellations:', err);
       });
   }, []);
 
@@ -249,6 +251,19 @@ export default function App() {
             completed_status: 1,
           });
           console.log('%c[ASTRA DIAGNOSTIC] 💾 Score Submitted to Backend Successfully:', 'color: #4ade80;', submitRes);
+          if (submitRes?.attempts_used !== undefined) {
+            setPlayer((prev) => prev ? {
+              ...prev,
+              total_attempts_used: submitRes.attempts_used,
+              best_score: submitRes.best_score ?? prev.best_score,
+            } : prev);
+            setLastAttemptResult((prev) => ({
+              ...prev,
+              attempts_used: submitRes.attempts_used,
+              attempts_remaining: submitRes.attempts_remaining,
+              best_score: submitRes.best_score,
+            }));
+          }
         } catch (e) {
           console.warn('[ASTRA DIAGNOSTIC] ⚠️ Final score sync warning:', e);
         }
