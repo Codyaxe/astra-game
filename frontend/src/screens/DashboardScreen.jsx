@@ -1034,7 +1034,8 @@ export default function Dashboard({
                   <tr style={{ borderBottom: `1px solid ${colors.inputBorder}`, color: colors.textDim, fontSize: 11, fontWeight: 700 }}>
                     <th style={{ padding: "10px 12px" }}>SR-CODE</th>
                     <th style={{ padding: "10px 12px" }}>PLAYER NAME</th>
-                    <th style={{ padding: "10px 12px" }}>COURSE & SECTION</th>
+                    <th style={{ padding: "10px 12px" }}>COLLEGE / DEPT</th>
+                    <th style={{ padding: "10px 12px" }}>COURSE</th>
                     <th style={{ padding: "10px 12px" }}>ATTEMPTS</th>
                     <th style={{ padding: "10px 12px" }}>BEST SCORE</th>
                     <th style={{ padding: "10px 12px", textAlign: "right" }}>ACTIONS</th>
@@ -1047,8 +1048,11 @@ export default function Dashboard({
                       <td style={{ padding: "12px", fontWeight: 700, color: colors.text }}>
                         {r.last_name}, {r.first_name} {r.middle_initial || ""}
                       </td>
+                      <td style={{ padding: "12px", color: colors.gold, fontWeight: 700 }}>
+                        {r.department || "CICS"}
+                      </td>
                       <td style={{ padding: "12px", color: colors.textDim }}>
-                        {r.course} {r.year_level && `${r.year_level}-${r.section}`}
+                        {r.course || "BSCS"} {r.year_level && `(${r.year_level})`}
                       </td>
                       <td style={{ padding: "12px" }}>
                         <span

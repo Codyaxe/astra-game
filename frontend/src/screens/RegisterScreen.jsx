@@ -177,42 +177,28 @@ export default function RegisterForm({
     };
   }, [photo, scanMessage]);
 
-  const coursesList = [
-    { value: "CICS", label: "CICS" },
-    { value: "COE", label: "COE" },
-    { value: "CET", label: "CET" },
-    { value: "CAFAD", label: "CAFAD" },
-    { value: "CAS", label: "CAS" },
-    { value: "CBA", label: "CBA" },
+  const departmentList = [
+    { value: "CICS", label: "CICS (College of Informatics & Computing Sciences)" },
+    { value: "COE", label: "COE (College of Engineering)" },
+    { value: "CET", label: "CET (College of Engineering Technology)" },
+    { value: "CAFAD", label: "CAFAD (College of Architecture, Fine Arts & Design)" },
+    { value: "CAS", label: "CAS (College of Arts & Sciences)" },
+    { value: "CBA", label: "CBA (College of Business & Accountancy)" },
   ];
 
-  const yearLevels = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
-
-  const sectionsList = [
-    "Section 101",
-    "Section 102",
-    "Section 201",
-    "Section 202",
-    "Section 301",
-    "Section 302",
-    "Section 401",
-    "Section 402",
+  const yearLevels = [
+    "1st Year",
+    "2nd Year",
+    "3rd Year",
+    "4th Year",
+    "Masters",
+    "PhD",
   ];
 
-  function handleCourseSelect(selectedCourse) {
-    let dept = selectedCourse;
-    const c = selectedCourse.toLowerCase();
-    if (c.includes("information technology") || c.includes("computer science") || c === "cics") dept = "CICS";
-    else if (c.includes("engineering technology") || c.includes("industrial technology") || c === "cet") dept = "CET";
-    else if (c.includes("engineering") || c === "coe") dept = "COE";
-    else if (c.includes("architecture") || c === "cafad") dept = "CAFAD";
-    else if (c === "cas") dept = "CAS";
-    else if (c === "cba") dept = "CBA";
-
+  function handleDepartmentSelect(selectedDept) {
     setForm((prev) => ({
       ...prev,
-      course: selectedCourse,
-      dept,
+      dept: selectedDept,
     }));
   }
 
@@ -587,16 +573,28 @@ export default function RegisterForm({
             />
           </Field>
 
-          {/* Custom Dropdown for COURSE matching mockup */}
+          {/* Custom Dropdown for COLLEGE / DEPARTMENT */}
           <CustomSelect
             icon={GraduationCap}
-            placeholder="COURSE"
-            value={form.course}
-            options={coursesList}
-            onChange={(val) => handleCourseSelect(val)}
+            placeholder="COLLEGE / DEPARTMENT"
+            value={form.dept}
+            options={departmentList}
+            onChange={(val) => handleDepartmentSelect(val)}
           />
 
-          {/* Custom Dropdown for YEAR LEVEL matching mockup */}
+          {/* Plain text input for COURSE (e.g. BSCS, BSIT) */}
+          <Field icon={LayoutGrid}>
+            <input
+              className="reg-input"
+              style={styles.pillInput}
+              placeholder="COURSE (e.g. BSCS, BSIT, BSCE)"
+              value={form.course}
+              onChange={(e) => update("course", e.target.value)}
+              required
+            />
+          </Field>
+
+          {/* Custom Dropdown for YEAR LEVEL */}
           <CustomSelect
             icon={Layers}
             placeholder="YEAR LEVEL"
@@ -604,17 +602,6 @@ export default function RegisterForm({
             options={yearLevels}
             onChange={(val) => update("yearLevel", val)}
           />
-
-          {/* Plain text input for BLOCK / SECTION */}
-          <Field icon={LayoutGrid}>
-            <input
-              className="reg-input"
-              style={styles.pillInput}
-              placeholder="BLOCK / SECTION (e.g. 3301)"
-              value={form.section}
-              onChange={(e) => update("section", e.target.value)}
-            />
-          </Field>
 
           <div style={{ display: "flex", gap: 10, marginTop: 4, width: "100%" }}>
             <button
