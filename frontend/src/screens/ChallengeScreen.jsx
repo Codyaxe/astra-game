@@ -308,25 +308,7 @@ export default function ChallengeScreen({
             },
           };
 
-          if (sessionId || player?.id) {
-            submitAttempt({
-              session_id: sessionId,
-              player_id: player?.id,
-              score: calculatedScore,
-              time_elapsed_ms: elapsed,
-              wrong_connections: wrongConnections,
-              total_clicks: totalClicks + 1,
-              wand_travel_dist: wandTravelDistRef.current,
-              recalibration_count: recalibrationCount,
-              completed_status: 1,
-              completed_connections: completedConnections.length + 1,
-              total_connections: validGuideSegments.length || (starNodes.length - 1),
-            })
-              .then((res) => startWinDialogue({ ...winResult, ...res }))
-              .catch(() => startWinDialogue(winResult));
-          } else {
-            startWinDialogue(winResult);
-          }
+          startWinDialogue(winResult);
         }
       } else if (!exists && allowFakeNodeTrace && (difficulty === 'medium' || difficulty === 'hard')) {
         // TRAP STAR / DECOY SNAP (Adds red error line, shifts activeNode to decoy star)

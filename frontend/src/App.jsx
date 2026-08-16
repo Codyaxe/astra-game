@@ -246,6 +246,7 @@ export default function App() {
             player_id: player?.id,
             sr_code: player?.sr_code,
             score: averageScore,
+            attempt_number: attemptNumber,
             time_elapsed_ms: Math.round(updatedTelemetry.total_time_sec * 1000),
             wand_travel_dist: Math.round(updatedTelemetry.total_travel_dist_cm * 10),
             completed_status: 1,

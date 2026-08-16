@@ -84,9 +84,10 @@ def get_player_by_ticket(qr_ticket_code: str) -> dict | None:
     return rows[0] if rows else None
  
  
-def increment_attempt_and_update_best_score(player_id: int, new_score: float) -> dict:
+def increment_attempt_and_update_best_score(player_id: int, new_score: float, attempt_number: int = None) -> dict:
     """
-    Update best_score and total_attempts_used for the player.
+    Increment a player's used attempts and update their all-time best score.
+    Returns attempt count and new high score flag.
     """
     rows = execute("SELECT * FROM players WHERE id = %s", (player_id,))
     if not rows:
@@ -121,28 +122,13 @@ def increment_attempt_and_update_best_score(player_id: int, new_score: float) ->
 
     player = rows[0]
     current_best = float(player.get("best_score") or 0.0)
-
-    # 1. Fetch scores grouped by attempt_number for this player
-    avg_query = """
-        SELECT attempt_number, SUM(score) as total_score, COUNT(*) as stages_count
-        FROM game_sessions
-        WHERE player_id = %s
-        GROUP BY attempt_number
-    """
-    attempt_sums = execute(avg_query, (player_id,))
-
     best_score = max(current_best, float(new_score or 0.0))
-    current_used = int(player.get("total_attempts_used") or 0)
-    attempts_used = min(MAX_ATTEMPTS, current_used + 1)
 
-    for attempt in attempt_sums:
-        att_num = attempt.get("attempt_number") or 1
-        stages_count = max(1, attempt.get("stages_count") or 1)
-        avg = float(attempt.get("total_score") or 0.0) / stages_count
-        if avg > best_score:
-            best_score = avg
-        if att_num > attempts_used:
-            attempts_used = min(MAX_ATTEMPTS, att_num)
+    current_used = int(player.get("total_attempts_used") or 0)
+    if attempt_number is not None and int(attempt_number) > 0:
+        attempts_used = min(MAX_ATTEMPTS, int(attempt_number))
+    else:
+        attempts_used = min(MAX_ATTEMPTS, current_used + 1)
 
     best_score = round(best_score, 1)
 

@@ -218,8 +218,8 @@ def submit_attempt():
         result["completed_status"] = completed_status
         return jsonify(result), 200
 
-    # Direct player submission fallback
-    attempt_result = increment_attempt_and_update_best_score(player_id, score)
+    attempt_number = data.get("attempt_number")
+    attempt_result = increment_attempt_and_update_best_score(player_id, score, attempt_number=attempt_number)
     return jsonify({
         "player_id": player_id,
         "score": score,
