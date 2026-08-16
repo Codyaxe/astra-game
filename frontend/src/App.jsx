@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getConstellations, registerPlayer } from './services/api';
+import { getConstellations, registerPlayer, submitAttempt } from './services/api';
 import { preloadAll } from './utils/audio';
 import { ASSETS } from './data/assets';
 import { DEFAULT_CONSTELLATIONS } from './data/defaultConstellations';
