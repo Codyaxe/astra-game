@@ -145,6 +145,13 @@ export default function ConstellationLayer({
           <stop offset="50%" stopColor="#F4D58D" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#F4D58D" stopOpacity="0" />
         </radialGradient>
+
+        {/* Custom Red Error Star Glow Gradient */}
+        <radialGradient id="star-aura-red" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#EF4444" stopOpacity="1" />
+          <stop offset="50%" stopColor="#EF4444" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* 0. Semi-Transparent Blue Guide Lines for Target Valid Connections (Easy Mode Only) */}
@@ -168,24 +175,27 @@ export default function ConstellationLayer({
         );
       })}
 
-      {/* 1. Permanent Validated Celestial Gold Connections */}
+      {/* 1. Permanent Validated Celestial Gold & Wrong Decoy Connections */}
       {connectedSegments.map((segment, idx) => {
         const fromStar = starMap.get(segment.from);
         const toStar = starMap.get(segment.to);
         if (!fromStar || !toStar) return null;
 
+        const isWrong = Boolean(segment.isWrong);
+
         return (
           <g key={`conn-${idx}`}>
-            {/* Outer Gold Glow Line */}
+            {/* Outer Glow Line */}
             <line
               x1={fromStar.x}
               y1={fromStar.y}
               x2={toStar.x}
               y2={toStar.y}
-              stroke="#F4D58D"
+              stroke={isWrong ? "#EF4444" : "#F4D58D"}
               strokeWidth="6"
-              strokeOpacity="0.65"
-              filter="url(#gold-glow)"
+              strokeOpacity="0.75"
+              filter={isWrong ? "url(#silver-glow)" : "url(#gold-glow)"}
+              strokeDasharray={isWrong ? "8 4" : "none"}
               strokeLinecap="round"
             />
             {/* Core Bright Line */}
@@ -194,7 +204,7 @@ export default function ConstellationLayer({
               y1={fromStar.y}
               x2={toStar.x}
               y2={toStar.y}
-              stroke="#FFFFFF"
+              stroke={isWrong ? "#FCA5A5" : "#FFFFFF"}
               strokeWidth="2.5"
               strokeLinecap="round"
             />
@@ -243,22 +253,60 @@ export default function ConstellationLayer({
         );
       })()}
 
-      {/* 3. Snapping Transition Pulse (isSnap = true -> Gold Spark Pulse) */}
-      {isRecentSnap && snapEffect.success && snapToStar && (
-        <g transform={`translate(${snapToStar.x}, ${snapToStar.y})`}>
-          <circle
-            r="32"
-            fill="none"
-            stroke="#F4D58D"
-            strokeWidth="3"
-            style={{
-              animation: 'snapSpark 0.45s ease-out forwards',
-            }}
-          />
+      {/* 3. Snapping Transition Pulse (Success -> Gold Pulse, Error/Wrong -> Red Circle Error Pulse) */}
+      {isRecentSnap && (
+        <g>
+          {snapEffect.success && snapToStar && (
+            <g transform={`translate(${snapToStar.x}, ${snapToStar.y})`}>
+              <circle
+                r="32"
+                fill="none"
+                stroke="#F4D58D"
+                strokeWidth="3"
+                style={{
+                  animation: 'snapSpark 0.45s ease-out forwards',
+                }}
+              />
+            </g>
+          )}
+
+          {!snapEffect.success && (snapToStar || snapFromStar) && (
+            <g transform={`translate(${(snapToStar || snapFromStar).x}, ${(snapToStar || snapFromStar).y})`}>
+              {/* Expanding Red Ripple Ring */}
+              <circle
+                r="24"
+                fill="rgba(239, 68, 68, 0.2)"
+                stroke="#EF4444"
+                strokeWidth="3"
+                style={{
+                  animation: 'wrongRedPulse 0.5s ease-out forwards',
+                }}
+              />
+              {/* Inner Red Core Flash */}
+              <circle
+                r="10"
+                fill="#EF4444"
+                style={{
+                  animation: 'wrongCoreFlash 0.4s ease-out forwards',
+                }}
+              />
+            </g>
+          )}
+
           <style>{`
             @keyframes snapSpark {
               0% { transform: scale(0.3); opacity: 1; stroke-width: 5px; }
               100% { transform: scale(1.8); opacity: 0; stroke-width: 1px; }
+            }
+            @keyframes wrongRedPulse {
+              0% { transform: scale(0.4); opacity: 1; stroke-width: 4px; }
+              60% { stroke-width: 2.5px; opacity: 0.85; }
+              100% { transform: scale(1.6); opacity: 0; stroke-width: 1px; }
+            }
+            @keyframes wrongCoreFlash {
+              0% { transform: scale(0.6); opacity: 0.9; }
+              50% { transform: scale(1.2); opacity: 0.6; }
+              100% { transform: scale(0.2); opacity: 0; }
             }
           `}</style>
         </g>
@@ -268,9 +316,11 @@ export default function ConstellationLayer({
       {Array.from(starMap.values()).map((star) => {
         const isFake = Boolean(star.isFake || star.fake);
         const isActive = star.id === activeStarId;
-        const isConnected = connectedSegments.some(
+        const connectedSegment = connectedSegments.find(
           (s) => s.from === star.id || s.to === star.id
         );
+        const isConnected = Boolean(connectedSegment);
+        const isWrongStar = Boolean(connectedSegment?.isWrong);
 
         // In Easy mode, fake stars are rendered visibly as White Dwarfs.
         // In Medium and Hard modes, fake stars look like normal authentic constellation stars!
@@ -284,25 +334,44 @@ export default function ConstellationLayer({
             {/* Outer Aura Glow */}
             <circle
               r={nodeRadius}
-              fill={showAsWhiteDwarf ? "rgba(148, 163, 184, 0.18)" : "url(#star-aura)"}
+              fill={
+                isWrongStar
+                  ? "url(#star-aura-red)"
+                  : showAsWhiteDwarf
+                  ? "rgba(148, 163, 184, 0.18)"
+                  : "url(#star-aura)"
+              }
               className="star-node-aura"
             />
 
             {showAsWhiteDwarf ? (
               /* White Dwarf Dead Star Asset — Small, dense, cold pale cyan-gray core with dashed icy ring */
               <g>
-                <circle r={8 * scale} fill="none" stroke="#64748B" strokeWidth="1" strokeDasharray="3 2" opacity="0.65" />
-                <circle r={4.5 * scale} fill="#94A3B8" opacity="0.85" />
-                <circle r={2.2 * scale} fill="#E2E8F0" />
+                <circle
+                  r={8 * scale}
+                  fill="none"
+                  stroke={isWrongStar ? "#EF4444" : "#64748B"}
+                  strokeWidth="1"
+                  strokeDasharray="3 2"
+                  opacity={isWrongStar ? "0.9" : "0.65"}
+                />
+                <circle r={4.5 * scale} fill={isWrongStar ? "#EF4444" : "#94A3B8"} opacity="0.85" />
+                <circle r={2.2 * scale} fill={isWrongStar ? "#FCA5A5" : "#E2E8F0"} />
               </g>
             ) : (
               /* 4-Point Starlight Diamond Flare Asset */
               <g>
                 <polygon
                   points={`${0 * scale},${-10 * scale} ${3 * scale},${-3 * scale} ${10 * scale},${0 * scale} ${3 * scale},${3 * scale} ${0 * scale},${10 * scale} ${-3 * scale},${3 * scale} ${-10 * scale},${0 * scale} ${-3 * scale},${-3 * scale}`}
-                  fill={isConnected || isActive ? '#F4D58D' : '#F1F0EC'}
+                  fill={
+                    isWrongStar
+                      ? '#EF4444'
+                      : isConnected || isActive
+                      ? '#F4D58D'
+                      : '#F1F0EC'
+                  }
                 />
-                <circle r={coreRadius} fill="#FFFFFF" />
+                <circle r={coreRadius} fill={isWrongStar ? '#FCA5A5' : '#FFFFFF'} />
               </g>
             )}
 
@@ -311,7 +380,15 @@ export default function ConstellationLayer({
               <text
                 y={nodeRadius + 15}
                 textAnchor="middle"
-                fill={showAsWhiteDwarf ? '#64748B' : (isConnected || isActive ? '#F4D58D' : '#94A3B8')}
+                fill={
+                  isWrongStar
+                    ? '#EF4444'
+                    : showAsWhiteDwarf
+                    ? '#64748B'
+                    : isConnected || isActive
+                    ? '#F4D58D'
+                    : '#94A3B8'
+                }
                 fontSize="12"
                 fontWeight="bold"
                 fontFamily="sans-serif"

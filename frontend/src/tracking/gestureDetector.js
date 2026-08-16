@@ -1,10 +1,10 @@
 /**
- * gestureDetector.js — High-Precision Natural Wand & Hand Gesture Detector
+ * gestureDetector.js — Natural Wand & Hand Gesture Detector with Palm & Fist Support
  *
  * Tracks:
  * 1. Wand Pointer Coordinates (Index fingertip position { x, y, z })
- * 2. Forward Tilt (Wand Pitch forward) OR Pinch / Tap Gesture (Index + Thumb) to draw lines
- * 3. Neutral Untilt / Release to snap and complete connections
+ * 2. Closed Fist vs Open Palm recognition
+ * 3. Forward Tilt / Pinch / Hover states
  */
 
 export class GestureDetector {
@@ -24,9 +24,17 @@ export class GestureDetector {
   update(landmarks) {
     if (!landmarks || landmarks.length === 0) return null;
 
-    const indexTip = landmarks[8];
-    const indexMcp = landmarks[5];
+    const wrist = landmarks[0];
     const thumbTip = landmarks[4];
+    const indexMcp = landmarks[5];
+    const indexPip = landmarks[6];
+    const indexTip = landmarks[8];
+    const middlePip = landmarks[10];
+    const middleTip = landmarks[12];
+    const ringPip = landmarks[14];
+    const ringTip = landmarks[16];
+    const pinkyPip = landmarks[18];
+    const pinkyTip = landmarks[20];
 
     // Compute Pitch Angle (Forward / Back tilt)
     const dz = indexTip.z - indexMcp.z;
@@ -39,6 +47,23 @@ export class GestureDetector {
     const pinchDz = indexTip.z - thumbTip.z;
     const pinchDist = Math.sqrt(pinchDx * pinchDx + pinchDy * pinchDy + pinchDz * pinchDz);
 
+    // Distances from wrist to tips vs wrist to PIP joints
+    const distToWrist = (p) => {
+      const dx = p.x - wrist.x;
+      const dy = p.y - wrist.y;
+      const dz = (p.z || 0) - (wrist.z || 0);
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    };
+
+    const indexCurled = distToWrist(indexTip) < distToWrist(indexPip) * 1.05;
+    const middleCurled = distToWrist(middleTip) < distToWrist(middlePip) * 1.05;
+    const ringCurled = distToWrist(ringTip) < distToWrist(ringPip) * 1.05;
+    const pinkyCurled = distToWrist(pinkyTip) < distToWrist(pinkyPip) * 1.05;
+
+    const curledCount = (indexCurled ? 1 : 0) + (middleCurled ? 1 : 0) + (ringCurled ? 1 : 0) + (pinkyCurled ? 1 : 0);
+    const isFist = curledCount >= 3;
+    const isOpenPalm = curledCount <= 1;
+
     const now = Date.now();
     const point = {
       x: indexTip.x,
@@ -46,6 +71,8 @@ export class GestureDetector {
       z: indexTip.z,
       pitch,
       pinchDist,
+      isFist,
+      isOpenPalm,
       time: now,
     };
 
@@ -57,16 +84,17 @@ export class GestureDetector {
     if (this.baselineZ === null) {
       this.baselineZ = indexTip.z;
     } else {
-      // Smoothly drift baseline Z to adapt to user posture shifts
       this.baselineZ += (indexTip.z - this.baselineZ) * 0.02;
     }
 
     const isForwardTilt = this._detectForwardTilt(point);
     const isPinching = pinchDist < 0.065;
-    const isDrawing = isForwardTilt || isPinching;
+    const isDrawing = isForwardTilt || isPinching || isOpenPalm;
 
     return {
       point,
+      isFist,
+      isOpenPalm,
       isForwardTilt,
       isPinching,
       isDrawing,
@@ -77,13 +105,11 @@ export class GestureDetector {
   // ---- Forward Tilt or Pinch to Draw ----
   _detectForwardTilt(point) {
     const zDelta = (point.z - this.baselineZ);
-    // Forward tilt threshold: pitch < -12 deg or moved forward by > 0.025 in normalized Z
     return point.pitch < -12 || zDelta < -0.025;
   }
 
   _detectNeutralTilt(point, isPinching) {
     const zDelta = (point.z - this.baselineZ);
-    // Neutral release threshold: untilted pitch >= -8 deg and not pinching
     return !isPinching && (point.pitch >= -8 || zDelta >= -0.012);
   }
 }

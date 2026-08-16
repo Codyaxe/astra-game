@@ -575,6 +575,76 @@ export default function Dashboard({
                 </div>
               </div>
 
+              {/* Motion Tracking Gesture Style Selector */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Motion Gesture Style:</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {[
+                      { id: "point_auto", label: "👉 Point Auto-Trace" },
+                      { id: "fist_open", label: "✋ Palm / ✊ Fist" },
+                    ].map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => onUpdateSettings({ gestureStyle: g.id })}
+                        style={{
+                          background: (gameSettings.gestureStyle || "point_auto") === g.id ? colors.accent : "rgba(255,255,255,0.06)",
+                          color: (gameSettings.gestureStyle || "point_auto") === g.id ? "#fff" : colors.textDim,
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 10, color: colors.textDim, background: "rgba(0,0,0,0.25)", padding: "6px 10px", borderRadius: 8 }}>
+                  {(gameSettings.gestureStyle || "point_auto") === "point_auto" ? (
+                    <span>👉 <b>Point Auto-Trace</b>: Simply point your wand / index finger to trace and snap lines automatically.</span>
+                  ) : (
+                    <span>✋ <b>Palm & Fist Mode</b>: <b>Open Palm</b> = trace & connect starlight beam · <b>Closed Fist</b> = pause/stop tracing.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Fake Star Decoy Snapping Toggle (Medium & Hard) */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>Trap Stars (Decoy Snapping):</div>
+                  <div style={{ fontSize: 10, color: colors.textDim }}>Allow accidental snapping to fake stars in Medium/Hard</div>
+                </div>
+                <button
+                  onClick={() => onUpdateSettings({ allowFakeNodeTrace: !(gameSettings.allowFakeNodeTrace ?? true) })}
+                  style={{
+                    background: (gameSettings.allowFakeNodeTrace ?? true) ? "rgba(239, 68, 68, 0.2)" : "rgba(255,255,255,0.06)",
+                    color: (gameSettings.allowFakeNodeTrace ?? true) ? "#f87171" : colors.textDim,
+                    border: `1px solid ${(gameSettings.allowFakeNodeTrace ?? true) ? "rgba(239, 68, 68, 0.4)" : "transparent"}`,
+                    borderRadius: 8,
+                    padding: "5px 12px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {(gameSettings.allowFakeNodeTrace ?? true) ? "⚠️ ENABLED (Can Trap)" : "🛡️ DISABLED (Safe)"}
+                </button>
+              </div>
+
+              {/* Reverse Trace Undo Info Banner */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.3)", padding: "7px 10px", borderRadius: 8, marginTop: 2 }}>
+                <span style={{ fontSize: 14 }}>↩️</span>
+                <div style={{ fontSize: 11, color: colors.cyan, fontWeight: 600 }}>
+                  <b>Reverse Trace is Active:</b> Backtrack / glide backwards across the last connection to instantly undo a mistake!
+                </div>
+              </div>
+
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: colors.textDim }}>In-Game Camera Preview (PIP):</span>
                 <button

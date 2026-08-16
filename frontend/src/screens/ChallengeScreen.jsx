@@ -35,6 +35,8 @@ export default function ChallengeScreen({
   controlMode = 'hybrid',
   showCamPip = false,
   difficulty = 'easy',
+  gestureStyle = 'point_auto',
+  allowFakeNodeTrace = true,
   onWinStart,
   onComplete,
   onForceExit,
@@ -188,6 +190,23 @@ export default function ChallengeScreen({
 
   const handleDragComplete = useCallback(({ fromStarId, toStarId }) => {
     if (fromStarId != null && toStarId != null) {
+      // 0. REVERSE TRACE CHECK (Backtracking removes the last connection mistake)
+      if (completedConnections.length > 0) {
+        const lastConn = completedConnections[completedConnections.length - 1];
+        const isReverseOfLast =
+          (lastConn.to === fromStarId && lastConn.from === toStarId) ||
+          (lastConn.from === fromStarId && lastConn.to === toStarId);
+
+        if (isReverseOfLast) {
+          console.log('%c[ASTRA DIAGNOSTIC] ↩️ Reverse Trace Undo (Mouse/Wand):', 'color: #f59e0b; font-weight: bold;', fromStarId, '↩', toStarId);
+          setCompletedConnections((prev) => prev.slice(0, -1));
+          const targetNode = [...starNodes, ...fakeNodes].find((s) => s.id === toStarId);
+          if (targetNode) setActiveNode(targetNode);
+          playSfx('snap');
+          return;
+        }
+      }
+
       // 1. Check if edge is valid in either direction (bidirectional)
       const valid = isValidEdge(fromStarId, toStarId);
 
@@ -202,20 +221,23 @@ export default function ChallengeScreen({
         // SUCCESS SNAP (isSnap = true)
         const result = { success: true, from: fromStarId, to: toStarId, timestamp: Date.now() };
         setSnapEffect(result);
-        const updatedConns = [...completedConnections, { from: fromStarId, to: toStarId }];
+        const updatedConns = [...completedConnections, { from: fromStarId, to: toStarId, isWrong: false }];
         setCompletedConnections(updatedConns);
+        const targetNode = [...starNodes, ...fakeNodes].find((s) => s.id === toStarId);
+        if (targetNode) setActiveNode(targetNode);
         playSfx('snap');
 
         // Check if finished full constellation
         const requiredCount = validGuideSegments.length > 0 ? validGuideSegments.length : starNodes.length - 1;
+        const validConnCount = updatedConns.filter((c) => !c.isWrong).length;
         console.log('%c[ASTRA DIAGNOSTIC] 🔗 Snap Connection Added!', 'color: #38bdf8;', {
           from: fromStarId,
           to: toStarId,
-          connectedCount: updatedConns.length,
+          validConnCount,
           requiredCount,
         });
 
-        if (updatedConns.length >= requiredCount) {
+        if (validConnCount >= requiredCount) {
           if (hasEndedRef.current) return;
           hasEndedRef.current = true;
           setActiveNode(null);
@@ -253,20 +275,31 @@ export default function ChallengeScreen({
             startWinDialogue(winResult);
           }
         }
+      } else if (!exists && allowFakeNodeTrace && (difficulty === 'medium' || difficulty === 'hard')) {
+        // TRAP STAR / DECOY SNAP (Adds red error line, shifts activeNode to decoy star)
+        console.log('%c[ASTRA DIAGNOSTIC] ⚠️ Decoy Star Trapped!', 'color: #ef4444; font-weight: bold;', fromStarId, '->', toStarId);
+        const result = { success: false, from: fromStarId, to: toStarId, timestamp: Date.now() };
+        setSnapEffect(result);
+        const updatedConns = [...completedConnections, { from: fromStarId, to: toStarId, isWrong: true }];
+        setCompletedConnections(updatedConns);
+        const targetNode = [...starNodes, ...fakeNodes].find((s) => s.id === toStarId);
+        if (targetNode) setActiveNode(targetNode);
+        playSfx('wrong');
+        setWrongConnections((prev) => prev + 1);
       } else {
-        // INVALID EDGE OR ALREADY CONNECTED (isSnap = false)
+        // INVALID EDGE OR ALREADY CONNECTED
         const result = { success: false, from: fromStarId, to: toStarId, timestamp: Date.now() };
         setSnapEffect(result);
         playSfx('wrong');
         setWrongConnections((prev) => prev + 1);
       }
     } else {
-      // RELEASED IN EMPTY SPACE (isSnap = false)
+      // RELEASED IN EMPTY SPACE
       const result = { success: false, from: fromStarId, to: null, timestamp: Date.now() };
       setSnapEffect(result);
       playSfx('wrong');
     }
-  }, [completedConnections, isValidEdge]);
+  }, [completedConnections, isValidEdge, starNodes, fakeNodes, allowFakeNodeTrace, difficulty, wrongConnections, sessionId, totalClicks, recalibrationCount, startWinDialogue, stopTimer, validGuideSegments]);
 
   const activeNodeRef = useRef(activeNode);
   useEffect(() => {
@@ -490,11 +523,16 @@ export default function ChallengeScreen({
     return snap;
   }, [pointer, starNodes, fakeNodes]);
 
-  // ---- Wand Auto-Snap & Auto-Trace Engine (Proximity based, zero pinch needed) ----
+  // ---- Wand Auto-Snap, Reverse Trace Undo & Fake Star Tracing Engine ----
   const lastAutoSnapTimeRef = useRef(0);
 
   useEffect(() => {
     if (!pointer || (controlMode !== 'wand' && controlMode !== 'hybrid')) return;
+
+    // In 'fist_open' mode: closed fist disables tracing and pausing auto-snapping
+    if (gestureStyle === 'fist_open' && pointer.isFist) {
+      return;
+    }
 
     const allStars = [...starNodes, ...fakeNodes];
     const snap = getMagneticSnap(pointer, allStars);
@@ -506,35 +544,61 @@ export default function ChallengeScreen({
       return;
     }
 
-    // If activeNode is set and player moves near a valid next target star
+    // If activeNode is set and player moves near a different star node
     if (activeNode && snap.snapped && snap.node && snap.node.id !== activeNode.id) {
       const now = Date.now();
-      // Debounce auto-snap by 280ms
       if (now - lastAutoSnapTimeRef.current > 280) {
         const fromId = activeNode.id;
         const toId = snap.node.id;
 
-        // Check if this is a valid edge
+        // 1. REVERSE TRACE CHECK (Backtracking removes the last connection mistake)
+        if (completedConnections.length > 0) {
+          const lastConn = completedConnections[completedConnections.length - 1];
+          const isReverseOfLast =
+            (lastConn.to === fromId && lastConn.from === toId) ||
+            (lastConn.from === fromId && lastConn.to === toId);
+
+          if (isReverseOfLast) {
+            lastAutoSnapTimeRef.current = now;
+            console.log('%c[ASTRA DIAGNOSTIC] ↩️ Reverse Trace Undo:', 'color: #f59e0b; font-weight: bold;', fromId, '↩', toId);
+            setCompletedConnections((prev) => prev.slice(0, -1));
+            setActiveNode(snap.node);
+            playSfx('snap');
+            return;
+          }
+        }
+
+        // 2. FORWARD CONNECTION CHECK
         const valid = isValidEdge(fromId, toId);
         const exists = completedConnections.some(
           (s) => (s.from === fromId && s.to === toId) || (s.from === toId && s.to === fromId)
         );
 
         if (valid && !exists) {
+          // Valid forward edge
           lastAutoSnapTimeRef.current = now;
-          console.log('%c[ASTRA DIAGNOSTIC] 🪄 Auto-Snapped Edge (Proximity):', 'color: #4ade80; font-weight: bold;', fromId, '->', toId);
+          console.log('%c[ASTRA DIAGNOSTIC] 🪄 Auto-Snapped Valid Edge:', 'color: #4ade80; font-weight: bold;', fromId, '->', toId);
           setActiveNode(snap.node);
           handleDragComplete({ fromStarId: fromId, toStarId: toId });
+        } else if (!exists && allowFakeNodeTrace && (difficulty === 'medium' || difficulty === 'hard')) {
+          // Fake / Decoy Star Snapping in Medium and Hard mode
+          lastAutoSnapTimeRef.current = now;
+          console.log('%c[ASTRA DIAGNOSTIC] ⚠️ Auto-Snapped to Fake Star Decoy:', 'color: #ef4444; font-weight: bold;', fromId, '->', toId);
+          setCompletedConnections((prev) => [...prev, { from: fromId, to: toId, isWrong: true }]);
+          setWrongConnections((w) => w + 1);
+          setActiveNode(snap.node);
+          playSfx('wrong');
         }
       }
     }
-  }, [pointer, activeNode, starNodes, fakeNodes, controlMode, isValidEdge, completedConnections, handleDragComplete]);
+  }, [pointer, activeNode, starNodes, fakeNodes, controlMode, gestureStyle, allowFakeNodeTrace, difficulty, isValidEdge, completedConnections, handleDragComplete]);
 
   // Live Auto-Trace starlight trajectory from activeNode to current hand pointer
   const wandDrawingPath = useMemo(() => {
     if (
       !pointer ||
       !activeNode ||
+      (gestureStyle === 'fist_open' && pointer.isFist) ||
       winFlybyProgress !== null ||
       hasEndedRef.current ||
       (controlMode !== 'wand' && controlMode !== 'hybrid')
@@ -543,7 +607,7 @@ export default function ChallengeScreen({
     }
     const originPos = toScreenNorm(activeNode.x, activeNode.y);
     return [originPos, { x: pointer.x, y: pointer.y }];
-  }, [pointer, activeNode, winFlybyProgress, controlMode]);
+  }, [pointer, activeNode, gestureStyle, winFlybyProgress, controlMode]);
 
   // Accumulate wand distance
   useEffect(() => {
@@ -622,13 +686,19 @@ export default function ChallengeScreen({
       ? mouseDrawingPath
       : (wandDrawingPath.length > 0 ? wandDrawingPath : mouseDrawingPath);
 
+  const isTracing =
+    winFlybyProgress === null &&
+    !hasEndedRef.current &&
+    (gestureStyle !== 'fist_open' || !pointer?.isFist) &&
+    Boolean(activeNode && pointer);
+
   const activePointer =
     controlMode === 'mouse'
       ? (winFlybyProgress !== null || hasEndedRef.current ? { ...mouseWand, isDrawing: false } : mouseWand)
       : {
           x: snappedPointer?.x ?? pointer?.x ?? 0.5,
           y: snappedPointer?.y ?? pointer?.y ?? 0.5,
-          isDrawing: Boolean(activeNode && pointer && winFlybyProgress === null && !hasEndedRef.current),
+          isDrawing: isTracing,
         };
 
   return (

@@ -300,6 +300,8 @@ export default function App() {
           controlMode={gameSettings.controlMode}
           showCamPip={gameSettings.showCamPip}
           difficulty={gameSettings.difficulty || 'easy'}
+          gestureStyle={gameSettings.gestureStyle || 'point_auto'}
+          allowFakeNodeTrace={gameSettings.allowFakeNodeTrace ?? true}
           onWinStart={() => setIsStageWarping(true)}
           onComplete={handleChallengeComplete}
           onDisqualified={handleForceExitOrDisqualified}

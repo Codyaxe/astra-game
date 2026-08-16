@@ -89,10 +89,12 @@ export function useWandGestures({
         y: smoothedPoint.y,
         z: smoothedPoint.z,
         isDrawing: drawRef.current,
+        isFist: Boolean(detection.isFist),
+        isOpenPalm: Boolean(detection.isOpenPalm),
       });
     }
 
-    // Forward Tilt / Pinch to Draw State Machine
+    // Forward Tilt / Pinch / Open Palm State Machine
     const isDrawingGesture = detection.isDrawing;
     if (isDrawingGesture && !holdRef.current && now - lastActionTimeRef.current > 180) {
       holdRef.current = true;
@@ -100,15 +102,21 @@ export function useWandGestures({
       lastActionTimeRef.current = now;
       setOnHold(true);
       setOnDraw(true);
-      setGestureStatus(detection.isPinching ? 'Drawing (Pinch)' : 'Drawing (Tilt Forward)');
-    } else if (detection.isNeutralTilt && holdRef.current && now - lastActionTimeRef.current > 200) {
-      // Completed tilt -> untilt cycle: registers 1 deliberate connection snap
+      setGestureStatus(
+        detection.isOpenPalm
+          ? 'Open Palm (Tracing)'
+          : detection.isPinching
+          ? 'Drawing (Pinch)'
+          : 'Drawing (Tilt Forward)'
+      );
+    } else if ((detection.isNeutralTilt || detection.isFist) && holdRef.current && now - lastActionTimeRef.current > 200) {
+      // Completed tilt / fist stop: registers connection or stops draw
       holdRef.current = false;
       drawRef.current = false;
       lastActionTimeRef.current = now;
       setOnHold(false);
       setOnDraw(false);
-      setGestureStatus('Connected (Cycle Completed)');
+      setGestureStatus(detection.isFist ? 'Fist Closed (Paused)' : 'Connected (Cycle Completed)');
       onCompleteRef.current?.();
       setTimeout(() => setGestureStatus('Neutral'), 500);
     }
