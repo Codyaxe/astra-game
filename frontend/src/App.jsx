@@ -116,6 +116,7 @@ export default function App() {
     setPlayer(playerData);
     const rem = attemptsRemaining !== undefined ? attemptsRemaining : 3;
     setAttemptNumber(Math.max(1, 4 - rem));
+    setSessionStageScores([]);
     generateSessionPlaylist();
     setConstellationIndex(0);
     setScreen('challenge');
@@ -134,22 +135,38 @@ export default function App() {
     };
     setPlayer(guestPlayer);
     setAttemptNumber(1);
+    setSessionStageScores([]);
     generateSessionPlaylist();
     setConstellationIndex(0);
     setScreen('challenge');
   }, [generateSessionPlaylist]);
 
   const [isStageWarping, setIsStageWarping] = useState(false);
+  const [sessionStageScores, setSessionStageScores] = useState([]);
 
   const activePlaylist = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
   const currentConstellation = activePlaylist[constellationIndex] || activePlaylist[0];
 
   const handleChallengeComplete = useCallback((result) => {
     setIsStageWarping(false);
-    setLastAttemptResult(result || { isWin: true, score: 95 });
+    const stageScore = typeof result?.score === 'number' ? result.score : 100.0;
+    const updatedScores = [...sessionStageScores, stageScore];
+    setSessionStageScores(updatedScores);
+
+    // Compute fair normalized average percentage across all completed stages
+    const averageScore = Math.round((updatedScores.reduce((a, b) => a + b, 0) / updatedScores.length) * 10) / 10;
+    const finalResult = {
+      ...(result || {}),
+      stage_score: stageScore,
+      score: averageScore,
+      total_stages_cleared: updatedScores.length,
+    };
+
+    setLastAttemptResult(finalResult);
+
     if (result?.attempts_used !== undefined) {
       setPlayer((prev) => prev
-        ? { ...prev, total_attempts_used: result.attempts_used, best_score: result.best_score }
+        ? { ...prev, total_attempts_used: result.attempts_used, best_score: Math.max(prev.best_score || 0, averageScore) }
         : prev
       );
     }
@@ -157,15 +174,19 @@ export default function App() {
     // Check if more constellations remain in the active session playlist
     const currentList = sessionPlaylist.length > 0 ? sessionPlaylist : constellations;
     if (constellationIndex + 1 < currentList.length) {
-      console.log('%c[ASTRA] 🚀 Stage Solved -> Warping to next randomized constellation:', 'color: #4ade80; font-weight: bold;', currentList[constellationIndex + 1]?.name);
+      console.log('%c[ASTRA] 🚀 Stage Solved -> Warping to next randomized constellation:', 'color: #4ade80; font-weight: bold;', {
+        stageScore: `${stageScore}%`,
+        runningSessionAverage: `${averageScore}%`,
+        nextStage: currentList[constellationIndex + 1]?.name,
+      });
       setConstellationIndex((idx) => idx + 1);
       setScreen('challenge');
     } else {
-      // Completed all session constellations -> Show Final Round Score & Leaderboard
-      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Displaying Final Victory Score Overlay!', 'color: #facc15; font-weight: bold;');
+      // Completed all session constellations -> Show Final Round Normalized Score
+      console.log('%c[ASTRA] 🏆 All Session Constellations Cleared -> Final Normalized Session Score:', 'color: #facc15; font-weight: bold;', `${averageScore}%`, updatedScores);
       setScreen('challenge_win_score');
     }
-  }, [constellationIndex, sessionPlaylist, constellations]);
+  }, [constellationIndex, sessionStageScores, sessionPlaylist, constellations]);
 
   const handleForceExitOrDisqualified = useCallback((result) => {
     setLastAttemptResult(result || { isWin: false, score: 0 });
@@ -174,10 +195,12 @@ export default function App() {
 
   const handleRetryNextAttempt = useCallback(() => {
     setIsScoreExiting(false);
+    setSessionStageScores([]);
     setAttemptNumber((prev) => prev + 1);
+    generateSessionPlaylist();
     setConstellationIndex(0);
     setScreen('challenge');
-  }, []);
+  }, [generateSessionPlaylist]);
 
   const handleReturnToTitle = useCallback(() => {
     setIsScoreExiting(false);

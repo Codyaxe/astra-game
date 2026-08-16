@@ -264,7 +264,12 @@ export default function ChallengeScreen({
           const elapsed = Date.now() - startTimeRef.current;
           const elapsedSec = Math.round(elapsed / 100) / 10;
           const travelCm = Math.round(wandTravelDistRef.current / 10) / 10;
-          const calculatedScore = Math.max(75, 100 - wrongConnections * 5);
+
+          // Percentage Scoring: 70% Completion + up to 30% Speed Bonus (0% mistake penalty)
+          const limitSec = timeLimit || 30;
+          const timeRatio = Math.min(1.0, elapsedSec / limitSec);
+          const speedScore = 30 * Math.max(0.0, 1.0 - timeRatio);
+          const calculatedScore = Math.round((70 + speedScore) * 10) / 10;
 
           const winResult = {
             completed_status: 1,
